@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>NEU Admin Analytics (v2)</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+  window.addEventListener('error', () => {
+    if (!window.Chart) {
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/chart.js@4?' + Date.now();
+      document.head.appendChild(s);
+    }
+  }, { once:true });
+</script>
+<style>
+  :root{--neu:#C8102E; --ink:#111; --muted:#666; --card:#fff; --border:#E6E6E6;
+    --ok:#2E7D32; --warn:#E58A3C; --bad:#C62828; --bg:#f7f7f7;
+    --ok-bg:#EAF5EC; --ok-br:#C8E6CB; --warn-bg:#FFF4E5; --warn-br:#F8D9A5; --bad-bg:#FDEBEE; --bad-br:#F5B7BD;}
+  *{box-sizing:border-box}
+  body{font-family:Lato,Arial,sans-serif;background:var(--bg);margin:0;padding:24px;color:var(--ink)}
+  h2{margin:0 0 10px;color:var(--neu);font-weight:900}
+  h3{margin:0 0 10px}
+  .wrap{max-width:1300px;margin:0 auto}
+  .row{display:flex;flex-wrap:wrap;gap:18px;margin-top:14px}
+  .card{flex:1 1 520px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,.05)}
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  label{font-size:13px;margin-right:8px}
+  select,input,button{padding:7px 10px;border:1px solid #bbb;border-radius:8px;font-family:inherit}
+  button.primary{border-color:#000;background:#fff;color:var(--neu);cursor:pointer}
+  .legend{font-size:12px;color:var(--muted)}
+  .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .canvas-wrap{position:relative;width:100%;height:280px}
+  canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
+  .muted{font-size:12px;color:var(--muted)}
+  .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #ccc;border-radius:999px;padding:4px 10px;background:#fafafa;font-size:12px}
+  .pill button{border:0;background:transparent;cursor:pointer;font-size:12px}
+
+  .alert-center{display:grid;grid-template-columns:1.25fr .75fr;gap:18px}
+  .alert{display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-left-width:6px;border-radius:8px;background:#fff}
+  .alert.ok{border-left-color:var(--ok)}
+  .alert.warn{border-left-color:var(--warn)}
+  .alert.bad{border-left-color:var(--bad)}
+  .alert .icon{width:22px;height:22px;flex:0 0 22px}
+  .watchlist table{width:100%;border-collapse:separate;border-spacing:0 6px}
+  .watchlist td,.watchlist th{padding:8px 10px;background:#fff;border:1px solid #fff;border-left-color:var(--border);border-right-color:var(--border)}
+  .watchlist th{background:#fafafa;font-weight:700;border:1px solid var(--border)}
+  .sev-ok{color:var(--ok)} .sev-warn{color:var(--warn)} .sev-bad{color:var(--bad)}
+
+  .seg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .seg-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 4px 12px rgba(0,0,0,.05)}
+  .seg-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .seg-title{font-weight:900}
+  .seg-status{display:flex;gap:6px}
+  .seg-status .badge{font-size:12px;border:1px solid #ddd;padding:2px 8px;border-radius:999px;background:#fafafa}
+  .seg-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 10px}
+  .kpi{border:1px solid var(--border);border-radius:10px;padding:8px;background:#fff}
+  .kpi .k{font-size:12px;color:#555}
+  .kpi .v{font-weight:900;font-size:18px}
+  .mini{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .mini .canvas-wrap{height:220px}
+  .sg{font-size:12px;color:#888;margin-top:6px}
+
+  .alert-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+  .warnicon{font-size:36px;line-height:1}
+  .alert-title{font-weight:900;line-height:1.2}
+  #alertQuick{margin-top:4px;line-height:1.35}
+
+  .alert-summary{border:1px dashed var(--border);background:#fcfcfc;border-radius:10px;padding:10px;margin-bottom:10px}
+  .kchips{display:grid;grid-template-columns:repeat(5, minmax(0,1fr));gap:8px}
+  .kchip{border:1px solid var(--border);background:#fff;border-radius:10px;padding:8px}
+  .kchip .k{font-size:11px;color:#777;margin-bottom:2px}
+  .kchip .v{font-weight:900;font-size:16px}
+  .kchip.ok   {background:var(--ok-bg);   border-color:var(--ok-br)}
+  .kchip.warn {background:#FFF4E5; border-color:#F8D9A5}
+  .kchip.bad  {background:#FDEBEE; border-color:#F5B7BD}
+  .kchip.ok .v   {color:var(--ok)} .kchip.warn .v {color:var(--warn)} .kchip.bad .v  {color:var(--bad)}
+
+  .action-line{margin-top:10px;font-size:16px}
+  .action-line strong{font-size:22px;font-weight:900;display:inline-block}
+  .action-line.ok strong{color:var(--ok)} .action-line.warn strong{color:var(--warn)} .action-line.bad strong{color:var(--bad)}
+
+  .rgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px}
+  .rtile{border:1px solid var(--border);background:#fff;border-radius:10px;padding:8px}
+  .rtile .nm{font-size:11px;color:#777}
+  .rtile .v{font-weight:900;font-size:16px}
+  .rtile .delta{font-size:12px}
+  .delta.up{color:var(--bad)} .delta.down{color:var(--ok)}
+  .bar{height:6px;background:#eee;border-radius:999px;overflow:hidden;margin-top:6px}
+  .fill{height:100%;border-radius:999px}
+
+  /* College-specific mini blocks inside Alert Center */
+  .cblocks{display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px}
+  @media (min-width: 920px){ .cblocks{grid-template-columns:repeat(3,1fr);} }
+  .cblock{border:1px dashed var(--border);background:#fcfcfc;border-radius:10px;padding:10px}
+  .cblock .hdr{font-weight:900}
+  .cblock .line{margin-top:4px}
+
+  /* Feedback Summary headline */
+  .summary {display:grid; grid-template-columns: 1fr; gap:12px}
+  .headline {display:flex; align-items:baseline; gap:12px}
+  .headline .big {font-size:40px; font-weight:900; line-height:1}
+  .headline .label {font-size:14px; color:var(--muted)}
+  .kpi-grid {display:grid; grid-template-columns: repeat(4,1fr); gap:10px}
+  .kpi-grid .kpi {background:#fff; border:1px solid var(--border); border-radius:10px; padding:10px}
+  .kpi-grid .k {font-size:12px; color:#555}
+  .kpi-grid .v {font-weight:900; font-size:18px}
+  /* Alert table with grid lines */
+  .alert-table table{width:100%; border-collapse:collapse}
+  .alert-table th, .alert-table td{border:1px solid var(--border); padding:8px; background:#fff; text-align:left}
+  .alert-table th{background:#fafafa; font-weight:700}
+
+  .badge-tier{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--border);background:#fff;margin-left:8px}
+  .tier-positive{color:var(--ok);border-color:var(--ok)}
+  .tier-warning{color:var(--warn);border-color:var(--warn)}
+  .tier-attention{color:var(--bad);border-color:var(--bad)}
+  .funnel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+  .fcard{border:1px solid var(--border);background:#fff;border-radius:10px;padding:10px}
+  .fcard .title{font-size:12px;color:#666}
+  .fcard .value{font-weight:900;font-size:22px;line-height:1.1}
+  .isolated-action{margin-top:14px;padding-top:10px;border-top:2px dashed var(--border)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h2 style="display:flex;align-items:center;gap:10px">
+    Student Click Analytics — Admin View
+    <span class="pill" id="drillPill" style="display:none">
+      <span id="drillText"></span>
+      <button id="clearDrill">✕</button>
+    </span>
+</h2>
+
+<div class="card">
+  <div class="toolbar">
+    <label>College:</label>
+    <select id="college">
+      <option selected>College of Professional Studies</option>
+      <option>College of Engineering</option>
+      <option>College of Science</option>
+    </select>
+    <label>Start date:</label><input id="start" type="date"/>
+    <label>End date:</label><input id="end" type="date"/>
+    <button class="primary" id="apply">Apply</button>
+    <button id="clearAll">Clear All</button>
+    <!-- 🔽 CSV UI -->
+    <button class="primary" id="downloadCsv" disabled>Download Feedback CSV</button>
+    <span class="muted" id="csvStatus">CSV not available yet</span>
+    <!-- 🔼 -->
+    <span class="muted">Tip: use Start/End + College to focus on a slice of traffic.</span>
+  </div>
+</div>
+
+<!-- ALERT CENTER -->
+<div class="alert-center">
+  <div class="card">
+    <div class="alert-head">
+      <span class="warnicon" aria-hidden="true" title="Alerts">🚨</span>
+      <div>
+        <div class="alert-title">Alert Center</div>
+        <div class="muted" id="alertQuick"></div>
+      </div>
+    </div>
+    <div class="alert-summary">
+      <div class="kchips">
+        <div class="kchip ok" id="chipPos">
+          <div class="k">Positive rate</div><div class="v" id="kPosRate">—</div>
+        </div>
+        <div class="kchip" id="chipNeg">
+          <div class="k">Negative rate</div><div class="v" id="kNegRate">—</div>
+        </div>
+        <div class="kchip" id="chipDrop">
+          <div class="k">Drop-off after topic</div><div class="v" id="kDrop">—</div>
+        </div>
+        <div class="kchip" id="chipMid">
+          <div class="k">Mid-use exits</div><div class="v" id="kMid">—</div>
+        </div>
+        <div class="kchip" id="chipFocus">
+          <div class="k">Top focus</div><div class="v" id="kFocus">—</div>
+        </div>
+      </div>
+      <div class="cblocks" id="collegeBlocks"></div>
+      <div class="muted" id="posSummaryLine" style="margin-top:6px"></div>
+      <div class="muted" id="reasonDigest" style="margin-top:6px"></div>
+      <div class="rgrid" id="reasonTiles"></div>
+      <div class="muted" id="reasonCTA" style="margin-top:8px"></div>
+      <div class="action-line isolated-action" id="kAction">
+        Action: <strong>—</strong>
+      </div>
+    </div>
+    <div id="alerts"></div>
+  </div>
+
+  <div class="card watchlist">
+    <h3 style="margin-bottom:8px">Watchlist (auto-prioritized)</h3>
+    <table>
+      <thead>
+        <tr><th>Topic</th><th>Neg</th><th>Δ vs prev</th><th>Severity</th></tr>
+      </thead>
+      <tbody id="watch"></tbody>
+    </table>
+    <div class="muted" style="margin-top:6px">
+      Sorted by severity (neg rate &amp; volume, and spikes vs previous period).
+    </div>
+  </div>
+</div>
+<!-- /ALERT CENTER -->
+
+<!-- Chart 1 (doughnut) removed as requested -->
+
+<div class="row" style="margin-top:18px">
+  <div class="card">
+    <strong>1) New students — topics clicked (by college)</strong>
+    <div class="canvas-wrap"><canvas id="c2A"></canvas></div>
+    <div class="muted">Bars are topics. Series are CPS / COE / COS (or just the selected college).</div>
+  </div>
+  <div class="card">
+    <strong>2) Continuing students — topics clicked (by college)</strong>
+    <div class="canvas-wrap"><canvas id="c2B"></canvas></div>
+    <div class="muted">Bars are topics. Series are CPS / COE / COS (or just the selected college).</div>
+  </div>
+</div>
+
+<!-- ✅ NEW ADD-ON: within-college topic comparison -->
+<div class="row" style="margin-top:18px">
+  <div class="card">
+    <strong>3) Topic comparison — selected college</strong>
+    <div class="canvas-wrap"><canvas id="cTopicsCollege"></canvas></div>
+    <div class="muted">
+      For the selected college and date range: positive vs negative feedback by topic.
+    </div>
+  </div>
+</div>
+
+<!-- Chart 3 (reasons) and Chart 4 (neg by topic) remain removed -->
+
+</div> <!-- /.wrap -->
+
+<script>
+  // Safety banner for any JS error
+  window.addEventListener('error', (e) => {
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed;left:0;right:0;top:0;background:#C62828;color:#fff;padding:8px 12px;z-index:99999;font-family:monospace';
+    b.textContent = 'Admin JS error: ' + (e.message || e.error || 'unknown');
+    document.body.appendChild(b);
+    console.error('Admin JS error:', e);
+  });
+
+  // CPS = Red, COE = Green, COS = Blue
+  const COLLEGES = [
+    {name:"College of Professional Studies", short:"CPS", color:"#C8102E"},
+    {name:"College of Engineering",         short:"COE", color:"#2E7D32"},
+    {name:"College of Science",             short:"COS", color:"#0096C7"},
+  ];
+  const COLLEGE_COLOR = {
+    "College of Professional Studies": "#C8102E",
+    "College of Engineering":          "#2E7D32",
+    "College of Science":              "#0096C7"
+  };
+
+  const STATUSES = ["New Student","Continuing Student"];
+  const TOPICS = [
+    "Northeastern Credentials","Course Registration","Program Information",
+    "Transcripts","Graduation","Leave of Absence","Appeals & Grade Dispute"
+  ];
+  // 2A must be only these three + 2 new ones
+  const TOPICS_2A = [
+    "Northeastern Credentials",
+    "Course Registration",
+    "Program Information",
+    "Registration Error (New Students)",
+    "Deferral and Late Arrivals (New Students)"
+  ];
+
+  // ✅ Topic → contact email mapping for Alert Center Action line
+  const DEFAULT_CONTACT_EMAIL = "help@northeastern.edu";
+  const TOPIC_CONTACT = {
+    "Northeastern Credentials": "help@northeastern.edu",
+    "Course Registration": "learnerservices@northeastern.edu",
+    "Program Information": "learnerservices@northeastern.edu",
+    "Registration Error (New Students)": "learnerservices@northeastern.edu",
+    "Deferral and Late Arrivals (New Students)": "learnerservices@northeastern.edu"
+  };
+
+  const COLORS = { neu:"#C8102E", ok:"#2E7D32", bad:"#C62828", warn:"#E58A3C" };
+  const REASONS = [
+    {key:"incorrect",         name:"Information is Incorrect",    color:"#C62828"},
+    {key:"not_relevant",      name:"Information is Not Relevant", color:"#E58A3C"},
+    {key:"unclear",           name:"Information is Unclear",      color:"#6C63FF"},
+    {key:"need_more_details", name:"I Need More Details",         color:"#0096C7"},
+  ];
+
+  const dom = id => document.getElementById(id);
+  const isUnknown = (label)=> String(label||'').trim().toLowerCase()==='unknown';
+  function percent(v,t){ t=t||0; return (t>0? (v/t*100).toFixed(1):"0.0")+"%"; }
+  function toISO(d){ return d.toISOString().slice(0,10); }
+  function addDays(iso, delta){
+    const d=new Date(iso+"T00:00:00");
+    d.setDate(d.getDate()+delta);
+    return toISO(d);
+  }
+  function rangeLenDays(a,b){
+    const A=new Date(a+"T00:00:00"), B=new Date(b+"T00:00:00");
+    return Math.max(1, Math.round((B-A)/(86400000))+1);
+  }
+
+  function normalizeSeries(m){
+    if (!m) return [];
+    if (Array.isArray(m))
+      return m.map(x=>({
+        label:String(x.label ?? x.name ?? x.key ?? '').trim(),
+        value:Number(x.value ?? x.count ?? x.qty ?? x.n ?? 0)
+      })).filter(x=>x.label);
+    if (typeof m==='object')
+      return Object.entries(m).map(([label,v])=>({
+        label:String(label),
+        value:Number(v)||0
+      }));
+    return [];
+  }
+  const asMap = (arr)=>{ const m=new Map(); arr.forEach(d=>m.set(d.label,d.value)); return m; };
+
+  function computeRanges(){
+    let start = dom('start').value, end = dom('end').value;
+    if (!start || !end){
+      const today = toISO(new Date());
+      end = today;
+      start = addDays(today, -13);
+    }
+    const len = rangeLenDays(start,end);
+    const prevEnd = addDays(start, -1);
+    const prevStart = addDays(prevEnd, -(len-1));
+    return {start,end,prevStart,prevEnd,len};
+  }
+
+  async function fetchAnalytics(start,end, college=null, status=null){
+    const p = new URLSearchParams();
+    if (college) p.set('college', college);
+    if (status)  p.set('status', status);
+    if (start)   p.set('start', start);
+    if (end)     p.set('end', end);
+
+    try {
+      const res = await fetch('/api/v2/analytics?'+p.toString());
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error('Analytics fetch failed:', err);
+      const alerts = document.getElementById('alerts');
+      if (alerts) {
+        alerts.innerHTML = `
+          <div class="alert bad">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l9 18H3L12 2zM12 16v2m0-8v4" stroke="#C62828" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+            <div>
+              <div style="font-weight:700">Analytics API error</div>
+              <div class="muted">Couldn't load /api/v2/analytics. Check server logs &amp; CORS.</div>
+            </div>
+          </div>`;
+      }
+      return {};
+    }
+  }
+
+  function classify(val, warn, bad){ if (val >= bad) return 'bad'; if (val >= warn) return 'warn'; return 'ok'; }
+  function applySeverity(el, sev){ if (!el) return; el.classList.remove('ok','warn','bad'); el.classList.add(sev); }
+
+  let C2AChart, C2BChart, CTopicsChart;
+
+  function extractReasonCounts(data){
+    const map1 = data?.feedback?.neg_reasons || data?.neg_reasons || {};
+    const keyFromPretty = {
+      "Information is Incorrect":"incorrect",
+      "Information is Not Relevant":"not_relevant",
+      "Information is Unclear":"unclear",
+      "I Need More Details":"need_more_details"
+    };
+    const out = {total:0, incorrect:0, not_relevant:0, unclear:0, need_more_details:0};
+    for (const [label, val] of Object.entries(map1)){
+      const key = keyFromPretty[label] || null;
+      if (key){
+        const n = Number(val)||0;
+        out[key] += n;
+        out.total += n;
+      }
+    }
+    return out;
+  }
+
+  function renderReasonTiles(target, nowR, prevR){
+    if (!target) return;
+    const total = nowR.total||0, pTot=prevR.total||0;
+    const html = REASONS.map(r=>{
+      const n=nowR[r.key]||0, p=prevR[r.key]||0;
+      const shareNow = total? (n/total*100):0;
+      const sharePrev = pTot? (p/pTot*100):0;
+      const delta=shareNow-sharePrev;
+      return `
+        <div class="rtile">
+          <div class="nm">${r.name}</div>
+          <div class="v">${n} <span class="muted">(${shareNow.toFixed(1)}%)</span></div>
+          <div class="bar"><div class="fill" style="width:${Math.max(0,Math.min(100,shareNow))}%;background:${r.color}"></div></div>
+          <div class="delta ${delta>=0?'up':'down'}" style="margin-top:4px">${delta>=0?'▲':'▼'} ${Math.abs(delta).toFixed(1)} pp</div>
+        </div>`;
+    }).join('');
+    target.innerHTML = html;
+  }
+
+  function buildReasonCTA(nowR, prevR){
+    const total = nowR.total||0;
+    if (!total) return 'No negative reason signals in this period.';
+    const arr = REASONS.map(r=>{
+      const n=nowR[r.key]||0, p=prevR[r.key]||0;
+      const sNow = total? (n/total*100):0;
+      const sPrev = (prevR.total? (p/prevR.total*100):0);
+      return {key:r.key, name:r.name, share:sNow, delta:(sNow-sPrev)};
+    }).sort((a,b)=> b.share-a.share);
+    const top=arr[0], sec=arr[1]||null;
+    const actionMap = {
+      incorrect:'prioritize content corrections & quick errata; add verification checks to scripts.',
+      not_relevant:'tighten intent routing and clarify choices; add links to most-requested outcomes.',
+      unclear:'rewrite high-traffic answers in plain language; add examples & bullets.',
+      need_more_details:'expand answers with step-by-steps; link to forms and how-to pages.'
+    };
+    return `⚠️ Negative feedback is driven by <strong>${top.name}</strong> (${top.share.toFixed(1)}%${top.delta>=0?` ▲${Math.abs(top.delta).toFixed(1)}pp`:` ▼${Math.abs(top.delta).toFixed(1)}pp`} vs prev)${sec?`, followed by <strong>${sec.name}</strong> (${sec.share.toFixed(1)}%)`:''}. Recommended next step: ${actionMap[top.key]||'review content and routing.'}`;
+  }
+
+  function topicCountsFromStatusTopic(data, status, topicsList){
+    const stMap = asMap(normalizeSeries(data.status_topic || []));
+    const list = topicsList && topicsList.length ? topicsList : TOPICS;
+    return list.map(t => stMap.get(`${status} | ${t}`) || 0);
+  }
+
+  async function seriesForStatusFiltered(status, start, end, selectedCollegeName, topicsList){
+    if (selectedCollegeName){
+      const d = await fetchAnalytics(start, end, selectedCollegeName, status);
+      const col = COLLEGES.find(c => c.name === selectedCollegeName);
+      return [{
+        label: col ? col.short : 'Selected',
+        data: topicCountsFromStatusTopic(d, status, topicsList),
+        backgroundColor: col ? col.color : "#999999"
+      }];
+    }
+    return await Promise.all(COLLEGES.map(async col => {
+      const d = await fetchAnalytics(start, end, col.name, status);
+      return {
+        label: col.short,
+        data: topicCountsFromStatusTopic(d, status, topicsList),
+        backgroundColor: col.color
+      };
+    }));
+  }
+
+  async function renderGroupedTopics(status, canvasId, start, end, chartHolderRef, topicsList, selectedCollegeName){
+    const canvas = dom(canvasId); if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (chartHolderRef && chartHolderRef.chart) {
+      chartHolderRef.chart.destroy();
+      chartHolderRef.chart = null;
+    }
+    const labels = (topicsList && topicsList.length ? topicsList : TOPICS).slice();
+    const datasets = await seriesForStatusFiltered(status, start, end, selectedCollegeName, topicsList);
+    const chart = new Chart(ctx, {
+      type:'bar',
+      data:{labels, datasets},
+      options:{
+        maintainAspectRatio:false,
+        plugins:{legend:{position:'top'}},
+        scales:{x:{stacked:false}, y:{beginAtZero:true, stacked:false}},
+        animation:{duration:600}
+      }
+    });
+    if (chartHolderRef) chartHolderRef.chart = chart;
+  }
+
+  function shortForCollege(name){
+    const c = COLLEGES.find(x => x.name === name);
+    return c ? c.short : name;
+  }
+
+  function buildCollegeBlock(collegeName, data){
+    const negArr = normalizeSeries(data && data.neg_by_topic || []);
+    let topTopic = '—', maxN = -1;
+    for (const {label, value} of negArr){
+      if (label && value > maxN){ maxN = value; topTopic = label; }
+    }
+    const reasons = (data && data.feedback && data.feedback.neg_reasons) || {};
+    let topReason = '—', mr = -1;
+    for (const [label, count] of Object.entries(reasons)){
+      const n = Number(count) || 0;
+      if (n > mr){ mr = n; topReason = label; }
+    }
+    const short = shortForCollege(collegeName);
+    return `<div class="cblock">
+      <div class="hdr">Action required on ${short} — ${topTopic}</div>
+      <div class="line"><strong>Top negative reason:</strong> ${topReason}</div>
+    </div>`;
+  }
+
+  async function renderCollegeBlocks(start, end, collegeSel){
+    const container = dom('collegeBlocks');
+    if (!container) return;
+    if (collegeSel){
+      const d = await fetchAnalytics(start, end, collegeSel, null);
+      container.innerHTML = buildCollegeBlock(collegeSel, d);
+      const titleEl = document.querySelector('.alert-title');
+      if (titleEl) titleEl.textContent = shortForCollege(collegeSel) + ' Content Health';
+    } else {
+      const arr = await Promise.all(COLLEGES.map(async c => ({ c, d: await fetchAnalytics(start, end, c.name, null) })));
+      container.innerHTML = arr.map(({c,d}) => buildCollegeBlock(c.name, d)).join('');
+      const titleEl = document.querySelector('.alert-title');
+      if (titleEl) titleEl.textContent = 'All-College Aggregate Content Health';
+    }
+  }
+
+  function renderCollegeTopicComparison(data){
+    const canvas = dom('cTopicsCollege');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (CTopicsChart){
+      CTopicsChart.destroy();
+      CTopicsChart = null;
+    }
+
+    const posMap = asMap(normalizeSeries(data.pos_by_topic || []));
+    const negMap = asMap(normalizeSeries(data.neg_by_topic || []));
+
+    // Include all canonical topics, new + continuing
+    const labels = Array.from(new Set([
+      ...TOPICS_2A,
+      ...TOPICS
+    ]));
+
+    const posData = labels.map(t => posMap.get(t) || 0);
+    const negData = labels.map(t => negMap.get(t) || 0);
+
+    CTopicsChart = new Chart(ctx, {
+      type:'bar',
+      data:{
+        labels,
+        datasets:[
+          { label:'Positive', data:posData, backgroundColor:COLORS.ok },
+          { label:'Negative', data:negData, backgroundColor:COLORS.bad }
+        ]
+      },
+      options:{
+        maintainAspectRatio:false,
+        plugins:{legend:{position:'top'}},
+        scales:{x:{stacked:false}, y:{beginAtZero:true}},
+        animation:{duration:600}
+      }
+    });
+  }
+
+  async function refreshCsvUi(){
+    const btn = dom('downloadCsv');
+    const lab = dom('csvStatus');
+    if (!btn || !lab) return;
+    try{
+      const res = await fetch('/api/v2/csv-exists');
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const info = await res.json();
+      if (info.exists){
+        btn.disabled = false;
+        const kb = info.size ? Math.max(1, Math.round(info.size/1024)) : 0;
+        lab.textContent = `Feedback CSV available (${info.filename}, ~${kb} KB).`;
+      } else {
+        btn.disabled = true;
+        lab.textContent = 'CSV not available yet';
+      }
+    } catch(e){
+      console.error('CSV check failed', e);
+      btn.disabled = true;
+      lab.textContent = 'CSV check failed';
+    }
+  }
+
+  async function load(){
+    const {start,end,prevStart,prevEnd} = computeRanges();
+    const collegeSel = dom('college').value || null;
+
+    dom('start').value = start;
+    dom('end').value = end;
+
+    const [data, prev, dataNew, dataContinuing] = await Promise.all([
+      fetchAnalytics(start,end, collegeSel, null),
+      fetchAnalytics(prevStart,prevEnd, collegeSel, null),
+      fetchAnalytics(start,end, collegeSel, "New Student"),
+      fetchAnalytics(start,end, collegeSel, "Continuing Student")
+    ]);
+
+    const fb = data.feedback || {};
+    const totalPos = fb.positive || 0;
+    const totalNeg = fb.negative || 0;
+    const totalFb  = totalPos + totalNeg;
+    const dropOff  = fb.drop_off || 0;
+    const midUse   = fb.mid_use || 0;
+    const topicClicks = (data.meta && data.meta.total_topic_clicks) || 0;
+    const sessions    = (data.meta && data.meta.total_unique_sessions) || 0;
+
+    dom('posSummaryLine').textContent = totalFb
+      ? `Feedback summary — Positive ${percent(totalPos,totalFb)} (${totalPos}/${totalFb}). Negative ${percent(totalNeg,totalFb)} (${totalNeg}/${totalFb}).`
+      : `Feedback summary — No feedback in selected range.`;
+
+    dom('alertQuick').textContent = sessions
+      ? `Showing ${sessions} unique sessions and ${topicClicks} topic selections for ${collegeSel || 'all colleges'} between ${start} and ${end}.`
+      : `No sessions for ${collegeSel || 'all colleges'} between ${start} and ${end}.`;
+
+    dom('alerts').innerHTML = `
+      <div class="alert ok">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke="#2E7D32" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        <div>
+          <div style="font-weight:700">Positive feedback summary</div>
+          <div class="muted">
+            ${totalFb ? `Positive ${percent(totalPos,totalFb)} • Negative ${percent(totalNeg,totalFb)} • Topic selections ${topicClicks}` : 'No feedback in selected range.'}
+          </div>
+        </div>
+      </div>`;
+
+    // Build watchlist rows
+    const toMap = (arr)=>{
+      const m = new Map();
+      normalizeSeries(arr||[]).forEach(({label,value})=>{
+        if (!isUnknown(label))
+          m.set(label, (m.get(label)||0) + (Number(value)||0));
+      });
+      return m;
+    };
+    const posMapNow  = toMap(data.pos_by_topic);
+    const negMapNow  = toMap(data.neg_by_topic);
+    const posMapPrev = toMap(prev.pos_by_topic || []);
+    const negMapPrev = toMap(prev.neg_by_topic || []);
+
+    let topicKeys = Array.from(new Set([...posMapNow.keys(), ...negMapNow.keys()]));
+    if (!topicKeys.length) topicKeys = TOPICS.slice();
+
+    const rows = topicKeys.map(k=>{
+      const p = posMapNow.get(k)||0;
+      const n = negMapNow.get(k)||0;
+      const tot = p+n;
+      const rate = tot ? n/tot : 0;
+      const prevN = negMapPrev.get(k)||0;
+      const delta = prevN>0 ? (n - prevN)/prevN : (n>0 ? 1 : 0);
+      const topic = k;
+      return {key:k, topic, pos:p, neg:n, rate, delta};
+    }).sort((a,b)=>
+      (b.neg - a.neg) || (b.rate - a.rate) || (b.delta - a.delta) || a.topic.localeCompare(b.topic)
+    );
+
+    dom('watch').innerHTML = rows.map(r=>{
+      const sev = r.neg > r.pos ? 'bad' : (r.neg === r.pos ? 'warn' : 'ok');
+      let sevLabel = sev==='bad' ? 'Attention' : (sev==='warn' ? 'Watch' : 'Stable');
+      const deltaPct = r.delta===0 ? '0%' : `${(r.delta*100).toFixed(1)}%`;
+      return `<tr>
+        <td>${r.topic}</td>
+        <td>${r.neg}</td>
+        <td>${r.delta>0?'+':''}${deltaPct}</td>
+        <td class="sev-${sev}">${sevLabel}</td>
+      </tr>`;
+    }).join('');
+
+    // Metrics for chips
+    const negRate = totalFb ? (totalNeg/totalFb) : 0;
+    const posRate = totalFb ? (totalPos/totalFb) : 0;
+    const dropRate = topicClicks>0 ? (dropOff/topicClicks) : 0;
+    const midRate  = topicClicks>0 ? (midUse/topicClicks) : 0;
+
+    dom('kPosRate').textContent = totalFb ? percent(totalPos,totalFb) : '—';
+    dom('kNegRate').textContent = totalFb ? percent(totalNeg,totalFb) : '—';
+    dom('kDrop').textContent    = topicClicks ? percent(dropOff,topicClicks) : '—';
+    dom('kMid').textContent     = topicClicks ? percent(midUse,topicClicks)   : '—';
+
+    const focusTopic = rows.length ? rows[0].topic : '—';
+    dom('kFocus').textContent = focusTopic;
+
+    // Severity logic (good high for positive, bad high for others)
+    const posSev = posRate >= 0.7 ? 'ok' : (posRate >= 0.4 ? 'warn' : 'bad');
+    applySeverity(dom('chipPos'), posSev);
+    applySeverity(dom('chipNeg'), classify(negRate, 0.20, 0.35));
+    applySeverity(dom('chipDrop'), classify(dropRate, 0.30, 0.50));
+    applySeverity(dom('chipMid'), classify(midRate, 0.25, 0.45));
+    applySeverity(dom('chipFocus'), rows.length ? 'warn' : 'ok');
+
+    // Reasons tiles + CTA
+    const nowReasons = extractReasonCounts(data);
+    const prevReasons = extractReasonCounts(prev || {});
+    renderReasonTiles(dom('reasonTiles'), nowReasons, prevReasons);
+    dom('reasonDigest').textContent = nowReasons.total
+      ? `Total negative reason signals: ${nowReasons.total} in this period.`
+      : `No negative reason signals in this period.`;
+    dom('reasonCTA').innerHTML = buildReasonCTA(nowReasons, prevReasons);
+
+    // Alert Action line with contact email
+    let action = 'Monitor and maintain.', actionSev = 'ok';
+    const topNegRow = rows.length ? rows[0] : null;
+
+    if (topNegRow && topNegRow.rate >= 0.4){
+      action = `Escalate content fix for ${topNegRow.topic}.`;
+      actionSev = 'bad';
+    } else if (negRate >= 0.35){
+      action = 'Open a sprint to address top negative topics.';
+      actionSev = 'bad';
+    } else if (dropRate >= 0.50){
+      action = 'Reduce post-topic dead-ends; add direct links to outcomes.';
+      actionSev = 'bad';
+    } else if (midRate >= 0.40){
+      action = 'Improve first-click affordances in chat (clear CTAs).';
+      actionSev = 'warn';
+    }
+
+    const aLine = dom('kAction');
+    applySeverity(aLine, actionSev);
+
+    let contactHtml = '';
+    if (topNegRow){
+      const email = TOPIC_CONTACT[topNegRow.topic] || DEFAULT_CONTACT_EMAIL;
+      if (email){
+        contactHtml = ` <span class="muted">Contact: <a href="mailto:${email}">${email}</a></span>`;
+      }
+    }
+    aLine.innerHTML = `Action: <strong>${action}</strong>${contactHtml}`;
+
+    // College mini-blocks
+    await renderCollegeBlocks(start, end, collegeSel);
+
+    // Chart 2A / 2B
+    const holder2A = { chart: C2AChart };
+    const holder2B = { chart: C2BChart };
+    await renderGroupedTopics("New Student","c2A", start, end, holder2A, TOPICS_2A, collegeSel);
+    await renderGroupedTopics("Continuing Student","c2B", start, end, holder2B, TOPICS, collegeSel);
+    C2AChart = holder2A.chart;
+    C2BChart = holder2B.chart;
+
+    // New: within-college topic comparison chart
+    renderCollegeTopicComparison(data);
+  }
+
+  // Initial wiring
+  document.addEventListener('DOMContentLoaded', async () => {
+    dom('apply').addEventListener('click', () => { load(); });
+    dom('clearAll').addEventListener('click', () => {
+      dom('start').value = '';
+      dom('end').value = '';
+      dom('college').value = "College of Professional Studies";
+      load();
+    });
+    dom('college').addEventListener('change', () => { load(); });
+    const csvBtn = dom('downloadCsv');
+    if (csvBtn){
+      csvBtn.addEventListener('click', () => {
+        window.location.href = '/download/feedback_freeform_feedback.csv';
+      });
+    }
+
+    await refreshCsvUi();
+    await load();
+  });
+</script>
+</body>
+</html>
