@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual envs / secrets
+.venv/
+venv/
+.env
+
+# Flask instance folder
+instance/
+
+# OS / editor files
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Local DB files
+*.sqlite
+*.sqlite3
+
+# csv files
+*.csv
+
+analytics_store.json
