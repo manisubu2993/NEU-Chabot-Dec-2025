@@ -85,12 +85,14 @@
 
   /* Bubble UI (card as bubble) */
   .card{
-    background: var(--white); border:1px solid var(--border);
-    border-radius: calc(var(--bubble-radius) * var(--cm));
-    width: calc(var(--bubble-w) * var(--cm));
-    padding: 14px 16px; box-shadow: 0 1px 0 rgba(0,0,0,.03);
-    line-height: 1.45;
-  }
+  background: var(--white); border:1px solid var(--border);
+  border-radius: calc(var(--bubble-radius) * var(--cm));
+  width: 100%;
+  max-width: 100%;
+  padding: 14px 16px; box-shadow: 0 1px 0 rgba(0,0,0,.03);
+  line-height: 1.45;
+}
+
   .title{ color:var(--neu-red); font-weight:700; font-size:20px; margin:0 0 6px 0; }
   .p{ margin:0; font-size:13px; color:var(--text); }
 
@@ -106,15 +108,17 @@
 
   /* Buttons inside a bubble-like container */
   .row.card{
-    width: calc(var(--bubble-w) * var(--cm));
-    margin-left: auto; margin-right: calc(var(--bubble-r-offset) * var(--cm)); margin-left: calc(var(--bubble-r-offset) * var(--cm));
-    margin-top: calc(var(--bubble-v-gap) * var(--cm));
-    border:1px solid var(--border);
-    border-radius: calc(var(--bubble-radius) * var(--cm));
-    padding: calc(0.3 * var(--cm));
-    box-shadow: 0 1px 0 rgba(0,0,0,.03);
-    background: var(--white);
-  }
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto; margin-right: calc(var(--bubble-r-offset) * var(--cm)); margin-left: calc(var(--bubble-r-offset) * var(--cm));
+  margin-top: calc(var(--bubble-v-gap) * var(--cm));
+  border:1px solid var(--border);
+  border-radius: calc(var(--bubble-radius) * var(--cm));
+  padding: calc(0.3 * var(--cm));
+  box-shadow: 0 1px 0 rgba(0,0,0,.03);
+  background: var(--white);
+}
+
   .row{ display:flex; flex-wrap:wrap; gap: calc(0.2 * var(--cm)); align-items:center; }
   .btn{
     display:inline-block; height: calc(var(--btn-h) * var(--cm)); width: calc(var(--btn-w) * var(--cm));
