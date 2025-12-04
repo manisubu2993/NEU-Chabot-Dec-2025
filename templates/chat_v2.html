@@ -9,7 +9,7 @@
     --cm: 37.8px; /* 1cm ≈ 37.8px */
     --neu-red:#C8102E; --text:#111; --muted:#666; --border:#DBDBDB; --white:#FFF;
     --bubble-w: 7.2;        /* cm */
-    --bubble-r-offset: 0.5;  /* cm from right wall */
+    --bubble-r-offset: 0.3;  /* cm from right wall */
     --bubble-v-gap: 0.3;     /* cm vertical gap */
     --bubble-radius: 0.25;   /* cm */
     --btn-h: 0.8;            /* cm */
@@ -62,8 +62,14 @@
     opacity:.05; pointer-events:none;
   }
 
-  .body{ position: relative; padding: calc(0.5 * var(--cm)); padding-top: calc(0.75 * var(--cm));  max-height: calc(12 * var(--cm)); overflow-y: auto; }
-
+  .body{
+  position: relative;
+  padding: calc(0.5 * var(--cm));
+  padding-top: calc(0.75 * var(--cm));
+  max-height: calc(12 * var(--cm));
+  overflow-y: auto;
+  overflow-x: hidden;   /* NEW */
+}
   .stack{ min-height: calc(8 * var(--cm)); padding-bottom: calc(0.5 * var(--cm)); }
 
   /* === Chat bubble row with avatar (N beside every bot bubble) === */
