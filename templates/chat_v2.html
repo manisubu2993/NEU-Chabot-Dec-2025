@@ -16,25 +16,32 @@
     --btn-w: 7.0;           /* cm */
   }
   *{box-sizing:border-box}
-  body{
-    margin:0; background:#f5f5f5; color:var(--text);
-    font-family:'Lato',system-ui,-apple-system,Arial,sans-serif;
-    display:flex; align-items:flex-start; justify-content:center;
-    min-height:100vh; padding:24px;
-  }
-
+ body{
+  margin:0;
+  background:#f5f5f5;
+  color:var(--text);
+  font-family:'Lato',system-ui,-apple-system,Arial,sans-serif;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  min-height:100vh;
+  padding:0;            /* was 24px – this was making things feel wider */
+  overflow-x:hidden;    /* make sure nothing spills sideways */
+}
   .window{
-    width: 100%;
-    max-width: 350px;
-    min-height: calc(14 * var(--cm));
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: 0 6px 20px rgba(0,0,0,.12);
-    position: relative;
-    overflow: hidden;
-    transition: width .2s ease, height .2s ease, max-height .2s ease;
-  }
+  width: 100%;
+  max-width: 350px;
+  margin: 8px auto;     /* NEW: center nicely inside the frame */
+  min-height: calc(14 * var(--cm));
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12);
+  position: relative;
+  overflow: hidden;
+  transition: width .2s ease, height .2s ease, max-height .2s ease;
+}
+
   .window.maximized{
     width: min(100vw - 48px, 1200px);
     height: min(100vh - 48px, 900px);
@@ -48,10 +55,13 @@
     border-bottom: 1px solid #000;
   }
   .header .logo{ height: calc(1 * var(--cm)); margin-left: calc(1.25 * var(--cm)); }
-  .header .actions{
-    margin-left: auto; display:flex; gap:12px;
-    position: relative; right: calc(0.25 * var(--cm));
-  }
+ .header .actions{
+  margin-left: auto;
+  display: none;             /* NEW: hide maximize / close UI */
+  gap:12px;
+  position: relative;
+  right: calc(0.25 * var(--cm));
+}
   .icon-btn{ width: calc(0.5 * var(--cm)); height: calc(0.5 * var(--cm)); cursor:pointer; user-select:none; display:block; }
   .icon-btn svg{ width:100%; height:100%; display:block; fill:#fff; }
 
