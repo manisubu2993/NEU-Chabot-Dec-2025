@@ -13,38 +13,42 @@
     --bubble-v-gap: 0.3;     /* cm vertical gap */
     --bubble-radius: 0.25;   /* cm */
     --btn-h: 0.8;            /* cm */
-
-    --body-padding: 0.5;     /* cm */
-    --panel-max-h: 12;       /* cm */
+    --btn-w: 7.0;           /* cm */
   }
-
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  body{
-    font-family:'Lato',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
-    background:transparent;
-    color:var(--text);
-  }
-
+  *{box-sizing:border-box}
+ body{
+  margin:0;
+  background:#f5f5f5;
+  color:var(--text);
+  font-family:'Lato',system-ui,-apple-system,Arial,sans-serif;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  min-height:100vh;
+  padding:0;            /* was 24px – this was making things feel wider */
+  overflow-x:hidden;    /* make sure nothing spills sideways */
+}
   .window{
-    width: 100%;
-    max-width: 350px;
-    margin: 8px auto;     /* center inside the frame */
-    /* min-height removed to avoid extra white space */
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: 0 6px 20px rgba(0,0,0,.12);
-    position: relative;
-    overflow: hidden;
-    transition: width .2s ease, height .2s ease, max-height .2s ease;
+  width: 100%;
+  max-width: 350px;
+  margin: 8px auto;     /* center nicely inside the frame */
+  min-height: calc(14 * var(--cm));
+  height: auto;         /* FIX: allow height to shrink-fit content to reduce bottom white space */
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12);
+  position: relative;
+  overflow: hidden;
+  transition: width .2s ease, height .2s ease, max-height .2s ease;
+}
+
+  .window.maximized{
+    width: min(100vw - 48px, 1200px);
+    height: min(100vh - 48px, 900px);
   }
 
-  .window.max{
-    max-width:none;
-    width:100%;
-    max-height:none;
-  }
-
+  /* Header (PRESERVED) */
   .header{
     position: sticky; top: 0; z-index: 5;
     height: calc(3 * var(--cm)); background: #000;
@@ -52,13 +56,13 @@
     border-bottom: 1px solid #000;
   }
   .header .logo{ height: calc(1 * var(--cm)); margin-left: calc(1.25 * var(--cm)); }
-  .header .actions{
-    margin-left: auto;
-    display: none;             /* hide maximize / close UI */
-    gap:12px;
-    position: relative;
-    right: calc(0.25 * var(--cm));
-  }
+ .header .actions{
+  margin-left: auto;
+  display: none;             /* hide maximize / close UI */
+  gap:12px;
+  position: relative;
+  right: calc(0.25 * var(--cm));
+}
   .icon-btn{ width: calc(0.5 * var(--cm)); height: calc(0.5 * var(--cm)); cursor:pointer; user-select:none; display:block; }
   .icon-btn svg{ width:100%; height:100%; display:block; fill:#fff; }
 
@@ -70,168 +74,119 @@
   }
 
   .body{
-    position: relative;
-    padding: calc(0.5 * var(--cm));
-    padding-top: calc(0.75 * var(--cm));
-    max-height: calc(12 * var(--cm));
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-  .stack{ min-height: 0; padding-bottom: calc(0.5 * var(--cm)); }
+  position: relative;
+  padding: calc(0.5 * var(--cm));
+  padding-top: calc(0.75 * var(--cm));
+  padding-bottom: 0;         /* FIX: remove extra padding at bottom */
+  max-height: calc(12 * var(--cm));
+  overflow-y: auto;
+  overflow-x: hidden;   /* NEW */
+}
+  .stack{ min-height: calc(8 * var(--cm)); padding-bottom: calc(0.5 * var(--cm)); }
 
-  .body::-webkit-scrollbar{ width:5px; }
-  .body::-webkit-scrollbar-thumb{
-    background:rgba(0,0,0,.15);
-    border-radius:999px;
-  }
-  .body{ scrollbar-width:thin; scrollbar-color:rgba(0,0,0,.15) transparent; }
-
+  /* === Chat bubble row with avatar (N beside every bot bubble) === */
   .bubble-row{
-    display:flex;
-    align-items:flex-start;
-    justify-content:flex-end;
-    gap: calc(0.2 * var(--cm));
-    margin-bottom: calc(var(--bubble-v-gap) * var(--cm));
+    display:flex; justify-content:flex-end; align-items:flex-start;
+    gap: calc(0.25 * var(--cm));
+    margin-right: calc(var(--bubble-r-offset) * var(--cm)); margin-left: calc(var(--bubble-r-offset) * var(--cm));
+    margin-top: calc(var(--bubble-v-gap) * var(--cm));
   }
-  .bubble-avatar{
-    width: calc(0.7 * var(--cm));
-    height: calc(0.7 * var(--cm));
-    border-radius:50%;
-    overflow:hidden;
-    flex-shrink:0;
-    background:#fff;
-    border:1px solid rgba(0,0,0,.08);
-    display:flex; align-items:center; justify-content:center;
-  }
-  .bubble-avatar img{
-    width:100%; height:100%; object-fit:cover;
-  }
+  .stack > .bubble-row:first-of-type{ margin-top: calc(1.3 * var(--cm)); }
 
-  .card{
-    background: var(--white); border:1px solid var(--border);
-    border-radius: calc(var(--bubble-radius) * var(--cm));
-    width: 100%;
-    max-width: 100%;
-    padding: 14px 16px; box-shadow: 0 1px 0 rgba(0,0,0,.03);
-    line-height: 1.45;
+  .bubble-avatar{
+    flex: 0 0 calc(1.0 * var(--cm));
+    width: calc(0.9 * var(--cm)); height: calc(0.9 * var(--cm));
+    border-radius:50%; overflow:hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.15);
   }
+  .bubble-avatar img{ width:100%; height:100%; display:block; object-fit:cover; }
+
+  /* Bubble UI (card as bubble) */
+  .card{
+  background: var(--white); border:1px solid var(--border);
+  border-radius: calc(var(--bubble-radius) * var(--cm));
+  width: 100%;
+  max-width: 100%;
+  padding: 14px 16px; box-shadow: 0 1px 0 rgba(0,0,0,.03);
+  line-height: 1.45;
+}
 
   .title{ color:var(--neu-red); font-weight:700; font-size:20px; margin:0 0 6px 0; }
   .p{ margin:0; font-size:13px; color:var(--text); }
 
   /* Typing indicator bubble */
   .typing{ display:flex; align-items:center; gap:6px; color:var(--muted); }
-  .typing .dots{ display:inline-flex; gap:4px }
+  .typing .dots{ display:inline-flex; gap:4px; }
   .typing .dots span{
-    width:4px; height:4px; border-radius:50%;
-    background:var(--muted); opacity:.4;
-    animation:blink 1s infinite ease-in-out;
+    width:6px; height:6px; border-radius:50%; background:#bbb; display:block; animation:bounce 1s infinite ease-in-out;
   }
-  .typing .dots span:nth-child(2){ animation-delay:.15s; }
-  .typing .dots span:nth-child(3){ animation-delay:.3s; }
+  .typing .dots span:nth-child(2){ animation-delay:.15s }
+  .typing .dots span:nth-child(3){ animation-delay:.3s }
+  @keyframes bounce{ 0%,80%,100%{transform:translateY(0);opacity:.6} 40%{transform:translateY(-4px);opacity:1} }
 
-  @keyframes blink{
-    0%,100%{ transform:translateY(0); opacity:.3; }
-    50%{ transform:translateY(-1px); opacity:1; }
-  }
+  /* Buttons inside a bubble-like container */
+  .row.card{
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto; margin-right: calc(var(--bubble-r-offset) * var(--cm)); margin-left: calc(var(--bubble-r-offset) * var(--cm));
+  margin-top: calc(var(--bubble-v-gap) * var(--cm));
+  border:1px solid var(--border);
+  border-radius: calc(var(--bubble-radius) * var(--cm));
+  padding: calc(0.3 * var(--cm));
+  box-shadow: 0 1px 0 rgba(0,0,0,.03);
+  background: var(--white);
+}
 
-  .row{
-    display:flex;
-    flex-wrap:wrap;
-    gap: calc(0.25 * var(--cm));
-    margin-top: calc(0.25 * var(--cm));
-  }
+  .row{ display:flex; flex-wrap:wrap; gap: calc(0.2 * var(--cm)); align-items:center; }
   .btn{
-    border-radius:999px;
-    border:1px solid #CCC;
-    padding:0 calc(0.5 * var(--cm));
-    height: calc(var(--btn-h) * var(--cm));
-    font-size:11px;
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    background:#f9f9f9;
-    cursor:pointer;
-    white-space:nowrap;
-    transition:background .15s ease, box-shadow .15s ease, transform .1s ease;
+    display:inline-block; height: calc(var(--btn-h) * var(--cm)); width: calc(var(--btn-w) * var(--cm));
+    line-height: calc(var(--btn-h) * var(--cm)); padding:0 16px; border:1px solid #000; border-radius: calc(0.25 * var(--cm));
+    background:#fff; color:var(--neu-red); text-align:center; font-size:14px; cursor:pointer; user-select:none;
+    transition: transform .06s ease, box-shadow .12s ease;
   }
-  .btn:hover{
-    background:#efefef;
-    box-shadow:0 1px 3px rgba(0,0,0,.12);
-    transform:translateY(-0.5px);
-  }
-  .btn.selected,
-  .btn:active{
-    background:var(--neu-red);
-    color:#fff;
-    border-color:var(--neu-red);
-    box-shadow:0 0 0 1px rgba(200,16,46,.35);
-  }
-
-  a{ color:#004990; text-decoration:none; }
-  a:hover{ text-decoration:underline; }
-
-  ul{ margin:6px 0 0 1.1em; padding:0; }
-  li{ margin:2px 0; font-size:13px; }
-
-  .meta{ margin-top:6px; font-size:11px; color:#777; }
-  .disclaimer{
-    font-size:11px; margin-top:8px; color:#555;
-    border-top:1px dashed #E0E0E0; padding-top:6px;
-  }
-
-  .you{
-    background:#EAF3FF;
-    border-color:#BFD7FF;
-  }
-
-  @media (max-width:420px){
-    .window{ margin:4px auto; }
-    .header{ padding:0 calc(0.25 * var(--cm)); }
-    .header .logo{ margin-left: calc(0.5 * var(--cm)); height: calc(0.9 * var(--cm)); }
-  }
-
+  .btn:hover{ font-weight:700; font-style: italic; }
+  .btn.selected{ background: var(--neu-red); color:#fff; font-weight:700; }
+  .footerpad{ height:18px; }
   </style>
 </head>
 <body>
-  <div class="window" id="win">
-    <div class="header">
-      <!-- PRESERVED LOGO -->
-      <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Northeastern University">
+<div class="window" id="win">
+  <div class="header">
+    <!-- PRESERVED LOGO -->
+    <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Northeastern University">
 
-      <!-- Inline SVG controls (minimize/maximize/close) -->
-      <div class="actions">
-        <!-- Maximize -->
-        <span id="btn-max" class="icon-btn" title="Maximize">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="5" y="5" width="14" height="14" fill="none" stroke="#fff" stroke-width="2"/>
-          </svg>
-        </span>
-        <!-- Minimize (hidden until maximized) -->
-        <span id="btn-min" class="icon-btn" title="Minimize" style="display:none;">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="5" y="11" width="14" height="2" fill="#fff"/>
-          </svg>
-        </span>
-        <!-- Close -->
-        <span id="btn-exit" class="icon-btn" title="Exit">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <line x1="6" y1="6" x2="18" y2="18" stroke="#fff" stroke-width="2"/>
-            <line x1="18" y1="6" x2="6" y2="18" stroke="#fff" stroke-width="2"/>
-          </svg>
-        </span>
-      </div>
-    </div>
-
-    <div class="skyline" aria-hidden="true"></div>
-
-    <div class="body">
-      <div class="stack" id="stack">
-      </div>
+    <!-- Inline SVG controls (minimize/maximize/close) -->
+    <div class="actions">
+      <!-- Maximize -->
+      <span id="btn-max" class="icon-btn" title="Maximize">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="5" y="5" width="14" height="14" fill="none" stroke="#fff" stroke-width="2"/>
+        </svg>
+      </span>
+      <!-- Minimize (hidden until maximized) -->
+      <span id="btn-min" class="icon-btn" title="Minimize" style="display:none;">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="7" y="7" width="10" height="10" fill="none" stroke="#fff" stroke-width="2"/>
+        </svg>
+      </span>
+      <!-- Exit -->
+      <span id="btn-exit" class="icon-btn" title="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6 L18 18 M18 6 L6 18" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </span>
     </div>
   </div>
 
-  <script>
+  <div class="skyline" aria-hidden="true"></div>
+
+  <div class="body">
+    <div id="stack" class="stack"></div>
+    <div class="footerpad"></div>
+  </div>
+</div>
+
+<script>
   const stack = document.getElementById('stack');
   const sessionId = (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2);
 
@@ -247,26 +202,18 @@
   const btnExit = document.getElementById('btn-exit');
 
   btnMax.addEventListener('click', ()=>{
-    win.classList.add('max');
-    btnMax.style.display='none';
-    btnMin.style.display='';
+    win.classList.add('maximized');
+    btnMax.style.display = 'none';
+    btnMin.style.display = 'inline-block';
   });
   btnMin.addEventListener('click', ()=>{
-    win.classList.remove('max');
-    btnMin.style.display='none';
-    btnMax.style.display='';
+    win.classList.remove('maximized');
+    btnMin.style.display = 'none';
+    btnMax.style.display = 'inline-block';
   });
-  btnExit.addEventListener('click', ()=>{
-    try{
-      if (window.parent && typeof window.parent.closeChatbot === 'function'){
-        window.parent.closeChatbot();
-        return;
-      }
-    }catch(e){}
-    window.close();
-  });
+  btnExit.addEventListener('click', ()=>{ window.history.back(); });
 
-  /* Bubble with avatar on the right */
+  /* Bubble helpers (avatar + bubble) — PRESERVED */
   function appendBot(html){
     const row = document.createElement('div');
     row.className = 'bubble-row';
@@ -282,7 +229,7 @@
     row.appendChild(avatar);
     row.appendChild(bubble);
     stack.appendChild(row);
-    requestAnimationFrame(()=>scrollPanelToBottom());
+    requestAnimationFrame(()=>window.scrollTo({top: document.body.scrollHeight, behavior:'smooth'}));
   }
 
   /* Typing indicator with avatar — PRESERVED */
@@ -293,7 +240,7 @@
     typingRow.className = 'bubble-row';
     typingRow.innerHTML = `
       <div class="bubble-avatar">
-        <img src="{{ url_for('static', filename='img/monogram-with-background.png') }}" alt="NU typing icon">
+        <img src="{{ url_for('static', filename='img/monogram-with-background.png') }}" alt="NU">
       </div>
       <div class="card typing">
         <span>${text}</span>
@@ -333,19 +280,16 @@
     scrollPanelToBottom();
   }
 
-  /* STATE used both client & server */
-  let STATE = {
-    session_id: sessionId,
-    college: null,
-    status: null,
-    topic: null
-  };
+  const linkBtn = (text, href)=>`<a class="link" target="_blank" rel="noopener" href="${href}">${text}</a>`;
 
+  /* ===== cache the initial menu so we can show Main Menu inline (no restart) ===== */
+  let STATE = { session_id: sessionId, college:null, status:null, topic:null };
   let START_CACHE = null;
 
-  async function init(){
+  // START — PRESERVED look/flow
+  (async function init(){
     const data = await post('/api/v2/start', {session_id: STATE.session_id});
-    STATE.college = null; STATE.status = null; STATE.topic = null;
+    START_CACHE = data;  // cache for inline Main Menu later
 
     if (data.title) appendBot(`<h3 class="title">${data.title}</h3>`);
     if (data.intro){
@@ -353,14 +297,8 @@
         appendBot(`<p class="p">${part}</p>`);
       });
     }
-    if (Array.isArray(data.colleges)) {
-      START_CACHE = data;  // cache for inline Main Menu later
-      renderButtons(data.colleges, onPickCollege);
-    }
-    if (data.disclaimer){
-      appendBot(`<p class="disclaimer">${data.disclaimer}</p>`);
-    }
-  }
+    if (Array.isArray(data.colleges)) renderButtons(data.colleges, onPickCollege);
+  })();
 
   /* ===== Inline Main Menu (does NOT restart or clear history) ===== */
   function showMainMenuInline(){
@@ -381,28 +319,25 @@
   async function onPickStatus(lbl){
     STATE.status = lbl;
     const data = await post('/api/v2/status', {session_id: STATE.session_id, college: STATE.college, status: lbl});
-    if (data.prompt) appendBot(`<p class="p">${data.prompt}</p>`);
-    if (Array.isArray(data.topics)) renderButtons(data.topics, onPickTopic);
-  }
+    if (data.confirm) appendBot(`<p class="p">${data.confirm}</p>`);
 
-  async function onPickTopic(lbl){
-    STATE.topic = lbl;
-    const data = await post('/api/v2/topic', {
-      session_id: STATE.session_id,
-      college: STATE.college,
-      status: STATE.status,
-      topic: lbl
-    });
-    if (data.answer){
-      String(data.answer).split('<br>').map(s => s.trim()).filter(Boolean).forEach(part => {
-        appendBot(`<p class="p">${part}</p>`);
-      });
+    // Treat "New Student" as the detailed client-side flows; still accept "Incoming Student" for legacy sessions
+    const isNew = (lbl === "New Student" || lbl === "Incoming Student");
+
+    if (isNew){
+      // Detailed topics for New students (client-side)
+      renderButtons([
+        "Northeastern Credentials",
+        "Course Registration",
+        "Program Information",
+        "Registration Error (New Students)",
+        "Deferral and Late Arrivals (New Students)",
+        "Back to the Start"
+      ], onPickIncomingTopicOrBack);
+    } else {
+      // Preserve server-driven list for Continuing
+      if (Array.isArray(data.topics)) renderButtons([...data.topics, data.backLabel], onPickTopicOrBack);
     }
-    if (data.links && Array.isArray(data.links)){
-      const listHtml = data.links.map(l => `<li><a href="${l.href}" target="_blank" rel="noopener">${l.label}</a></li>`).join('');
-      appendBot(`<ul>${listHtml}</ul>`);
-    }
-    helpfulTail(lbl);
   }
 
   /* ===== New Student — detailed flows (client-side) ===== */
@@ -416,54 +351,28 @@
       college: STATE.college,
       status: STATE.status,   // "New Student"
       topic: lbl
-    }).catch(()=>{});
+    });
 
-    if (lbl === "Offer received – what are my next steps?"){
-      appendBot(`<p class="p"><strong>After you receive your offer:</strong></p>`);
-      appendBot(`<p class="p">1. Review your offer letter carefully, including program, start term, and any conditions.</p>`);
-      appendBot(`<p class="p">2. Follow the instructions to accept your offer and pay any required deposit by the stated deadline.</p>`);
-      appendBot(`<p class="p">3. Watch for emails from the Toronto campus with onboarding and pre-arrival information.</p>`);
-      appendBot(`<p class="p"><strong>If anything in your offer is unclear, or if you see an error, please email:</strong> <a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></p>`);
-      helpfulTail(lbl);
-      return;
-    }
-
-    if (lbl === "When do I receive my timetable / class schedule?"){
-      appendBot(`<p class="p"><strong>Class schedules are not sent immediately after you receive an offer.</strong></p>`);
-      appendBot(`<p class="p">You will typically see your course schedule after:</p>`);
-      appendBot(`<p class="p">1. You have accepted your offer and completed any required pre-registration steps.</p>`);
-      appendBot(`<p class="p">2. You are enrolled in courses for your first term (this may involve registering yourself or being registered by your program).</p>`);
-      appendBot(`<p class="p">3. Once enrolled, you will see your class times and locations in the student systems used by your program.</p>`);
-      appendBot(`<p class="p"><strong>If you are unsure when you will receive your timetable, please email:</strong> <a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></p>`);
-      helpfulTail(lbl);
-      return;
-    }
-
-    appendBot(`<p class="p">For this topic, please email the Toronto campus team directly at <a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a> so they can review your specific situation.</p>`);
-    helpfulTail(lbl);
+    const flows = {
+      "Northeastern Credentials": flowCredentials,
+      "Course Registration": flowRegistration,
+      "Program Information": flowProgramInfo,
+      "Registration Error (New Students)": flowRegistrationError,
+      "Deferral and Late Arrivals (New Students)": flowDeferralLateArrivals
+    };
+    (flows[lbl] || (()=>{}))();
   }
 
-  /* ====== Helper to log deferral/arrival choice (for dashboards) ====== */
-  function logDeferralChoice(choice){
-    post('/api/v2/deferral_choice', {
-      session_id: STATE.session_id,
-      college: STATE.college,
-      status: STATE.status,
-      topic: STATE.topic,
-      choice
-    }).catch(()=>{});
-  }
-
-  /* === Helpful tail with feedback (POS + NEG) === */
+  /* Positive/Negative feedback sequence (PPT-compliant) */
   function helpfulTail(topic){
     appendBot(`<p class="p"><strong>Is there anything else you would like help with today?</strong></p>`);
     renderButtons(["Yes","No","Main Menu"], pick=>{
-      if (pick === "Yes" || pick === "Main Menu") return startOver();
+      if (pick === "Yes" || pick === "Main Menu") return showMainMenuInline();
 
       // Helpful?
       appendBot(`<p class="p"><strong>Was this information helpful?</strong></p>`);
       renderButtons(["Yes, it was helpful","No, I still need help","Main Menu"], fb=>{
-        if (fb === "Main Menu") return startOver();
+        if (fb === "Main Menu") return showMainMenuInline();
 
         if (fb.startsWith("Yes")){
           // Positive path
@@ -471,9 +380,9 @@
           appendBot(`<p class="p">That’s Great! I’m glad we were able to provide the information you needed.</p>`);
           appendBot(`<p class="p"><strong>Is there anything else I can help you with today?</strong></p>`);
           return renderButtons(["Yes","No","Main Menu"], end=>{
-            if (end === "Yes" || end === "Main Menu") return startOver();
-            appendBot(`<p class="p">I’m glad I was able to help ...ay and I look forward to having you back. Till next time!</p>`);
-            renderButtons(["Main Menu"], ()=>startOver());
+            if (end === "Yes" || end === "Main Menu") return showMainMenuInline();
+            appendBot(`<p class="p">I’m glad I was able to help you today and I look forward to having you back. Till next time!</p>`);
+            renderButtons(["Main Menu"], ()=>showMainMenuInline());
           });
         }
 
@@ -481,7 +390,7 @@
         const id = 'neg_' + Math.random().toString(36).slice(2);
         appendBot(`
           <div class="p" id="${id}">
-            I’m sorry I couldn’t help you find what you were loo...ing for today. Please let me know what you feel needs improving.
+            I’m sorry I couldn’t help you find what you were looking for today. Please let me know what you feel needs improving.
             <div style="margin-top:6px">
               <label><input type="checkbox" value="incorrect"> Information is Incorrect</label><br/>
               <label><input type="checkbox" value="not_relevant"> Information is Not Relevant</label><br/>
@@ -489,46 +398,49 @@
               <label><input type="checkbox" value="need_more_details"> I Need More Details</label>
             </div>
             <div style="margin-top:6px">
-              <input type="text" placeholder="Optional: add a short note (no NUIDs, please)" style="width:100%;padding:8px;border:1px solid #bbb;border-radius:8px"/>
+              <input type="text" placeholder="Optional: add a short note" style="width:100%;padding:8px;border:1px solid #bbb;border-radius:8px"/>
             </div>
             <div class="row" style="margin-top:8px"><div class="btn" id="${id}_submit">Submit feedback</div></div>
           </div>
         `);
         setTimeout(()=>{
           const wrap=document.getElementById(id), btn=document.getElementById(id+'_submit');
-          if(!wrap) return;
-          const noteInput = wrap.querySelector('input[type="text"]');
-          const NUMBER_WORDS = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi;
 
-          if (noteInput){
-            noteInput.addEventListener('input', ()=>{
-              let v = noteInput.value || "";
-              // Remove any digit sequences
-              v = v.replace(/\d+/g, '');
-              // Remove common spelled-out numbers
-              v = v.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, '');
-              noteInput.value = v;
-            });
+          // FIX: force scroll to the bottom when this block appears
+          const bodyPanel = document.querySelector('.body');
+          if(bodyPanel){
+            bodyPanel.scrollTop = bodyPanel.scrollHeight;
           }
 
-          if(btn){
+          // FIX: prevent entering numeric IDs in the optional note
+          if (wrap) {
+            const noteInput = wrap.querySelector('input[type="text"]');
+            if (noteInput) {
+              noteInput.addEventListener('input', function(){
+                let t = this.value;
+
+                // remove digits
+                t = t.replace(/[0-9]/g, '');
+
+                // remove number words (case-insensitive)
+                const blockWords = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|hundred|thousand|lakh|million)\b/gi;
+                t = t.replace(blockWords, '');
+
+                this.value = t;
+              });
+            }
+          }
+
+          if(btn && wrap){
             btn.onclick=()=>{
               const reasons=[...wrap.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
-              let rawNote = noteInput ? (noteInput.value || "") : "";
-              // Final guard: block ID-like content
-              if (/\d{4,}/.test(rawNote) || NUMBER_WORDS.test(rawNote) || /nuid/i.test(rawNote)){
-                alert("For your privacy, please do not include ID numbers here.");
-                NUMBER_WORDS.lastIndex = 0;
-                return;
-              }
-              const note = rawNote;
+              const note=wrap.querySelector('input[type="text"]').value||"";
               sendFeedback({helpful:false, topic, reasons, note});
-              appendBot(`<p class="p">Thank you, your feedback h...e! I hope to be able to better support you in the future.</p>`);
-              // ⬇ NEW: directly restart welcome + main menu
-              startOver();
+              appendBot(`<p class="p">Thank you, your feedback helps me improve! I hope to be able to better support you in the future.</p>`);
+              // FIX: directly show Main Menu again, no extra questions
+              renderButtons(["Main Menu"], ()=>showMainMenuInline());
             };
           }
-          scrollPanelToBottom();
         },0);
       });
     });
@@ -543,20 +455,276 @@
       ...payload
     });
     if (navigator.sendBeacon){
-      try{
-        navigator.sendBeacon('/api/v2/feedback', new Blob([body], {type:'application/json'}));
-        return;
-      }catch(e){}
+      try{ navigator.sendBeacon('/api/v2/feedback', new Blob([body],{type:'application/json'})); return; }catch(e){}
     }
-    fetch('/api/v2/feedback', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body
-    }).catch(()=>{});
+    fetch('/api/v2/feedback', {method:'POST', headers:{'Content-Type':'application/json'}, body});
+  }
+
+  /* ----- Flow 1: Northeastern Credentials ----- */
+  function flowCredentials(){
+    appendBot(`<p class="p"><strong>Northeastern Credentials</strong><br>
+      Newly admitted students will receive instructions about setting up a Student Hub account via the email address on file or their admissions portal.<br><br>
+      Have you claimed your Northeastern email?</p>`);
+    renderButtons(["Yes","No","Main Menu"], ans=>{
+      if(ans==="Main Menu") return showMainMenuInline();
+
+      if(ans==="Yes"){
+        appendBot(`<p class="p">You can access your Student Hub here: ${linkBtn("me.northeastern.edu","https://me.northeastern.edu/")}<br>
+          Are you able to log in to your Student Hub?</p>`);
+        return renderButtons(["Yes","No","Main Menu"], a2=>{
+          if(a2==="Main Menu") return showMainMenuInline();
+          if(a2==="Yes") return helpfulTail("Northeastern Credentials");
+
+          appendBot(`<p class="p">First, review this guide to troubleshoot your Northeastern credentials: ${linkBtn("Student Hub & credentials help","https://service.northeastern.edu/tech?id=kb_article_view&sysparm_article=KB0012456")}.</p>`);
+          appendBot(`<p class="p">If you still cannot log in, email <a class="link" href="mailto:help@northeastern.edu">help@northeastern.edu</a> with your <strong>full name</strong> and <strong>NUID</strong> to re-activate your Northeastern credentials.</p>`);
+          helpfulTail("Northeastern Credentials");
+        });
+      }
+
+      appendBot(`<p class="p">Please check your admissions portal or the email address you used in your application for instructions on your Northeastern email and Student Hub account.</p>`);
+      appendBot(`<p class="p">If you cannot find these instructions, email <a class="link" href="mailto:help@northeastern.edu">help@northeastern.edu</a> with your full name and NUID so they can help you set up your Northeastern credentials.</p>`);
+      helpfulTail("Northeastern Credentials");
+    });
+  }
+
+  /* ----- Flow 2: Course Registration ----- */
+  function flowRegistration(){
+    appendBot(`<p class="p"><strong>Course Registration (Incoming Students)</strong><br>Do you know what courses you want to register for?</p>`);
+    renderButtons(["Yes","No","Main Menu"], ans=>{
+      if(ans==="Main Menu") return showMainMenuInline();
+
+      if(ans==="Yes"){
+        appendBot(`<p class="p">You can register using one of the options below:</p>`);
+        return renderButtons(["Student Hub","Banner","Learner Services (CPS)","Main Menu"], which=>{
+          if(which==="Main Menu") return showMainMenuInline();
+
+          if(which==="Student Hub"){
+            appendBot(`<p class="p">Log in to your Student Hub: ${linkBtn("me.northeastern.edu","https://me.northeastern.edu/")}<br>
+              Go to <em>Academics → Course Registration</em> and follow the prompts to register for classes.</p>`);
+          } else if(which==="Banner"){
+            appendBot(`<p class="p">You can also register directly in Banner: ${linkBtn("Student Registration (Banner)","https://nubanner.neu.edu/StudentRegistrationSsb/ssb/registration")}<br>
+              Click <em>Register for Classes</em>, choose the correct term, and then add your courses.</p>`);
+          } else {
+            appendBot(`<p class="p">If you are a CPS student and prefer support, contact <strong>Learner Services</strong>:</p>`);
+            appendBot(`<p class="p">Phone: <strong>1-833-NU-LEARN (1-833-685-3276)</strong><br>
+              Email: <a class="link" href="mailto:learnerservices@northeastern.edu">learnerservices@northeastern.edu</a></p>`);
+          }
+          helpfulTail("Course Registration");
+        });
+      }
+
+      // No → still deciding on courses
+      appendBot(`<p class="p">Start by reviewing your program requirements and recommended course map.</p>`);
+      appendBot(`<p class="p">You can search your program in the online catalog here: ${linkBtn("Academic Catalog","https://northeastern.smartcatalogiq.com/en/")}</p>`);
+      appendBot(`<p class="p">Have you already obtained your Northeastern credentials?</p>`);
+      renderButtons(["Yes","No","Main Menu"], got=>{
+        if(got==="Main Menu") return showMainMenuInline();
+
+        if(got==="Yes"){
+          appendBot(`<p class="p">Once you have chosen your courses, use the ${linkBtn("Student Registration (Banner)","https://nubanner.neu.edu/StudentRegistrationSsb/ssb/registration")} page or the Course Registration link in your Student Hub to complete registration.</p>`);
+        } else {
+          appendBot(`<p class="p">You’ll need your Northeastern credentials to register online. If you are still waiting on credentials, some CPS students may be able to use ${linkBtn("Express Registration","https://prod-web.neu.edu/wasapp/CPSCourseReg/?form=expressReg")} as directed in their admission communications.</p>`);
+        }
+        helpfulTail("Course Registration");
+      });
+    });
+  }
+
+  /* ----- Flow 3: Program Information ----- */
+  function flowProgramInfo(){
+    appendBot(`<p class="p"><strong>Program Information (Incoming Students)</strong><br>Would you like to create an Academic Plan for yourself?</p>`);
+    renderButtons(["Yes","No","Main Menu"], ans=>{
+      if(ans==="Main Menu") return showMainMenuInline();
+
+      if(ans==="Yes"){
+        appendBot(`<p class="p">You can visit Banner and create a customized academic plan based on your interests and professional background here:<br>
+          ${linkBtn("Banner – Academic Plan","https://nubanner.neu.edu/StudentRegistrationSsb/ssb/registration#")}</p>`);
+        return helpfulTail("Program Information");
+      }
+
+      // Canvas path
+      appendBot(`<p class="p"><strong>What is Canvas?</strong> Canvas is Northeastern’s learning management system and digital home base for course content, assignments, and communication.</p>`);
+      appendBot(`<p class="p">Have you logged in to your Canvas account?</p>`);
+      renderButtons(["Yes","No","Main Menu"], a=>{
+        if(a==="Main Menu") return showMainMenuInline();
+
+        if(a==="Yes"){
+          appendBot(`<p class="p">Are you able to view your courses?</p>`);
+          return renderButtons(["Yes","No","Main Menu"], v=>{
+            if(v==="Main Menu") return showMainMenuInline();
+            if(v==="Yes") return firstDay();
+            appendBot(`<p class="p">Courses you have registered for go live on Canvas about two days before the course start date.</p>`);
+            firstDay();
+          });
+        }
+
+        appendBot(`<p class="p">You can log in to Canvas using your Northeastern credentials here: ${linkBtn("Canvas","https://canvas.northeastern.edu/")}</p>`);
+        appendBot(`<p class="p">Were you able to log in?</p>`);
+        renderButtons(["Yes","No","Main Menu"], l=>{
+          if(l==="Main Menu") return showMainMenuInline();
+          if(l==="Yes") return firstDay();
+          appendBot(`<p class="p">If you still cannot log in, please contact the IT Service Desk at <a class="link" href="mailto:help@northeastern.edu">help@northeastern.edu</a> for assistance.</p>`);
+          helpfulTail("Program Information");
+        });
+      });
+
+      function firstDay(){
+        appendBot(`<p class="p">Is today your first day of the term?</p>`);
+        renderButtons(["Yes","No","Main Menu"], d=>{
+          if(d==="Main Menu") return showMainMenuInline();
+          if(d==="No"){
+            appendBot(`<p class="p">Courses you have registered for go live on Canvas two days before the course start date. Please check back 24 hours before the first day of your term.</p>`);
+            return helpfulTail("Program Information");
+          }
+          appendBot(`<p class="p">Are your courses now available on Canvas?</p>`);
+          renderButtons(["Yes","No","Main Menu"], now=>{
+            if(now==="Main Menu") return showMainMenuInline();
+            if(now==="Yes"){
+              appendBot(`<p class="p">You’re all set! Have a great term.</p>`);
+              return helpfulTail("Program Information");
+            }
+            appendBot(`<p class="p">You will need to get in touch with your course instructor. Please send them an email or speak with them after your first lecture.</p>`);
+            helpfulTail("Program Information");
+          });
+        });
+      }
+    });
+  }
+
+  /* ----- Flow 4: Registration Error (Incoming Students) ----- */
+  function flowRegistrationError(){
+    appendBot(`<p class="p"><strong>Registration Error – Incoming Students</strong><br>Have you registered for your courses?</p>`);
+    renderButtons(["Yes","No","Main Menu"], ans=>{
+      if(ans==="Main Menu") return showMainMenuInline();
+
+      if(ans==="Yes"){
+        appendBot(`<p class="p">Are you looking to change one or more of the courses you are currently registered in?</p>`);
+        return renderButtons(["Yes","No","Main Menu"], a2=>{
+          if(a2==="Main Menu") return showMainMenuInline();
+
+          if(a2==="Yes"){
+            appendBot(`<p class="p">You can log in to your Student Hub here: ${linkBtn("me.northeastern.edu","https://me.northeastern.edu/")} and change your courses from the Course Registration section.</p>`);
+            return helpfulTail("Registration Error (New Students)");
+          }
+
+          // Already registered but not changing courses → offer help with errors / I Am Here
+          return registrationHelp();
+        });
+      }
+
+      // Not yet registered → offer help with course registration errors / I Am Here
+      registrationHelp();
+    });
+
+    function registrationHelp(){
+      appendBot(`<p class="p">Do you need assistance with course registration or an error message you’re seeing?</p>`);
+      renderButtons(["Yes","No","Main Menu"], need=>{
+        if(need==="Main Menu") return showMainMenuInline();
+
+        if(need==="No"){
+          appendBot(`<p class="p">If your plans change, you can always review key dates in the Academic Calendar here: ${linkBtn("Academic Calendar","https://registrar.northeastern.edu/group/calendar/")}</p>`);
+          return helpfulTail("Registration Error (New Students)");
+        }
+
+        appendBot(`<p class="p">Some registration issues are related to <strong>I Am Here</strong>, Northeastern’s required attendance verification step for students.</p>`);
+        appendBot(`<p class="p">Have you completed the I Am Here process for this term?</p>`);
+        renderButtons(["Yes","No","I'm not sure","Main Menu"], ih=>{
+          if(ih==="Main Menu") return showMainMenuInline();
+
+          if(ih==="No"){
+            appendBot(`<p class="p">Log in to your Student Hub: ${linkBtn("me.northeastern.edu","https://me.northeastern.edu/")} and look for the <strong>I Am Here</strong> prompt to confirm your attendance.</p>`);
+            appendBot(`<p class="p">If the deadline has passed or you still see errors after completing I Am Here, please contact your student support team.</p>`);
+          } else {
+            appendBot(`<p class="p">If you are unsure about your I Am Here status or you may have missed the deadline, please connect with your support team as soon as possible.</p>`);
+          }
+
+          appendBot(`<p class="p"><strong>For CPS students</strong>, contact Learner Services:<br>
+            Phone: <strong>1-833-NU-LEARN (1-833-685-3276)</strong><br>
+            Email: <a class="link" href="mailto:learnerservices@northeastern.edu">learnerservices@northeastern.edu</a></p>`);
+          appendBot(`<p class="p"><strong>For students in other colleges</strong>, please contact your academic advisor or the Toronto student support services: ${linkBtn("Student Support – Toronto","https://studentlifetoronto.sites.northeastern.edu/student-support-services/")}</p>`);
+          appendBot(`<p class="p">You can also review important dates (like add/drop and I Am Here deadlines) in the Academic Calendar: ${linkBtn("Academic Calendar","https://registrar.northeastern.edu/group/calendar/")}</p>`);
+          helpfulTail("Registration Error (New Students)");
+        });
+      });
+    }
+  }
+
+  /* ----- Flow 5: Deferral and Late Arrivals (Incoming Students) ----- */
+  function flowDeferralLateArrivals(){
+    appendBot(`<p class="p"><strong>Deferral and Late Arrivals – Incoming Students</strong><br>Do you know where you can find key dates and important deadlines for the academic year?</p>`);
+    renderButtons(["Yes","No","Main Menu"], ans=>{
+      if(ans==="Main Menu") return showMainMenuInline();
+
+      if(ans==="No"){
+        appendBot(`<p class="p">You can find term start dates, add/drop deadlines, and other important dates in the Academic Calendar: ${linkBtn("Academic Calendar","https://registrar.northeastern.edu/group/calendar/")}</p>`);
+      }
+
+      appendBot(`<p class="p">Are you looking for more information about <strong>Late Arrival dates</strong> or <strong>deferral policies</strong> for your program?</p>`);
+      renderButtons(["Yes","No","Main Menu"], more=>{
+        if(more==="Main Menu") return showMainMenuInline();
+
+        if(more==="No"){
+          appendBot(`<p class="p">If your plans change or you have questions about timing, your admissions or academic advisor can help you interpret the dates in the Academic Calendar.</p>`);
+          return helpfulTail("Deferral and Late Arrivals (New Students)");
+        }
+
+        appendBot(`<p class="p">Generally, students should not arrive in Canada after the published <strong>Late Arrival Date</strong> or Program Start Date for their term. If your study permit or travel plans do not allow you to arrive by this date, you may need to request a deferral.</p>`);
+        appendBot(`<p class="p">For the latest details about late arrival and deferral for the Canadian campuses, please review:</p>`);
+        appendBot(`<p class="p">• ${linkBtn("OGS Canada – Late Arrival and Deferral Policies","https://international.northeastern.edu/ogs/student-support/global-campuses/canada/late-arrival-and-deferral-policies/")}<br>
+          • ${linkBtn("Graduate Admissions – Deferral FAQ","https://northeastern.my.site.com/GraduateAdmissionsFAQ/s/article/If-I-am-accepted-can-I-defer-my-admission.")}</p>`);
+        appendBot(`<p class="p">If you still have questions after reviewing these pages, please contact your admissions counselor or academic advisor for guidance specific to your program and campus.</p>`);
+        helpfulTail("Deferral and Late Arrivals (New Students)");
+      });
+    });
+  }
+
+  /* ===== Server-driven (unchanged) for other branches ===== */
+  async function onPickTopicOrBack(lbl){
+    if (lbl === "Back to the Start") return startOver(); // explicit restart
+    STATE.topic = lbl;
+    const data = await post('/api/v2/topic', {
+      session_id: STATE.session_id, college: STATE.college, status: STATE.status, topic: lbl
+    });
+    if (data.question) appendBot(`<p class="p">${data.question}</p>`);
+    if (data.yesLabel && data.noLabel) renderButtons([data.yesLabel, data.noLabel], ans => onAnswer(ans));
+  }
+
+  async function onAnswer(ans){
+    const data = await post('/api/v2/answer', {
+      session_id: STATE.session_id, college: STATE.college, status: STATE.status,
+      topic: STATE.topic, answer: ans
+    });
+    if (data.reply) appendBot(`<p class="p link">${data.reply}</p>`);
+
+    if (data.askMore === true){
+      appendBot(`<p class="p"><strong>Is there anything else you would like help with today?</strong></p>`);
+      return renderButtons(["Yes","No","Main Menu"], pick=>{
+        if (pick === "Yes" || pick === "Main Menu") return showMainMenuInline();
+        renderButtons([data.feedbackYes, data.feedbackNo, data.startOver], onFeedbackOrStart);
+      });
+    }
+    renderButtons([data.feedbackYes, data.feedbackNo, data.startOver], onFeedbackOrStart);
+  }
+
+  // >>> ONLY CHANGED FUNCTION (fix positive detection for Continuing Student) <<<
+  async function onFeedbackOrStart(lbl){
+    if (lbl === "Back to the Start") return startOver();
+    const t = (lbl || '').toLowerCase();
+    // Positive if it says "helpful" and does NOT say "not"
+    const isPositive = t.includes('helpful') && !(/not|n['’]t/).test(t);
+    await post('/api/v2/feedback', {
+      session_id: STATE.session_id,
+      college: STATE.college,
+      status: STATE.status,
+      topic: STATE.topic,
+      helpful: isPositive    // send explicit boolean instead of {choice:...}
+    });
+    appendBot(`<p class="p">Thanks for the feedback! You can continue below.</p>`);
+    renderButtons(["Main Menu"], () => showMainMenuInline());
   }
 
   async function startOver(){
-    // Only when user explicitly clicks "Back to the Start" or we call it
+    // Only when user explicitly clicks "Back to the Start"
     const data = await post('/api/v2/start_over', {session_id: STATE.session_id});
     STATE = { session_id: STATE.session_id, college:null, status:null, topic:null };
     if (data.title) appendBot(`<h3 class="title">${data.title}</h3>`);
@@ -576,8 +744,6 @@
       session_id: STATE.session_id, choice: 'end'
     })], {type:'application/json'}));
   });
-
-  document.addEventListener('DOMContentLoaded', init);
-  </script>
+</script>
 </body>
 </html>
