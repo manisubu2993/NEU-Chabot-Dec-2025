@@ -26,17 +26,18 @@
   }
 
   .window{
-  width: 100%;
-  max-width: 350px;
-  margin: 8px auto;     /* center inside frame */
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(0,0,0,.12);
-  position: relative;
-  overflow: hidden;
-  transition: width .2s ease, height .2s ease, max-height .2s ease;
-}
+    width: 100%;
+    max-width: 350px;
+    margin: 8px auto;     /* center inside the frame */
+    /* min-height removed to avoid extra white space */
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.12);
+    position: relative;
+    overflow: hidden;
+    transition: width .2s ease, height .2s ease, max-height .2s ease;
+  }
 
   .window.max{
     max-width:none;
@@ -51,13 +52,13 @@
     border-bottom: 1px solid #000;
   }
   .header .logo{ height: calc(1 * var(--cm)); margin-left: calc(1.25 * var(--cm)); }
- .header .actions{
-  margin-left: auto;
-  display: none;             /* hide maximize / close UI */
-  gap:12px;
-  position: relative;
-  right: calc(0.25 * var(--cm));
-}
+  .header .actions{
+    margin-left: auto;
+    display: none;             /* hide maximize / close UI */
+    gap:12px;
+    position: relative;
+    right: calc(0.25 * var(--cm));
+  }
   .icon-btn{ width: calc(0.5 * var(--cm)); height: calc(0.5 * var(--cm)); cursor:pointer; user-select:none; display:block; }
   .icon-btn svg{ width:100%; height:100%; display:block; fill:#fff; }
 
@@ -69,13 +70,13 @@
   }
 
   .body{
-  position: relative;
-  padding: calc(0.5 * var(--cm));
-  padding-top: calc(0.75 * var(--cm));
-  max-height: calc(12 * var(--cm));
-  overflow-y: auto;
-  overflow-x: hidden;
-}
+    position: relative;
+    padding: calc(0.5 * var(--cm));
+    padding-top: calc(0.75 * var(--cm));
+    max-height: calc(12 * var(--cm));
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
   .stack{ min-height: 0; padding-bottom: calc(0.5 * var(--cm)); }
 
   .body::-webkit-scrollbar{ width:5px; }
@@ -107,13 +108,13 @@
   }
 
   .card{
-  background: var(--white); border:1px solid var(--border);
-  border-radius: calc(var(--bubble-radius) * var(--cm));
-  width: 100%;
-  max-width: 100%;
-  padding: 14px 16px; box-shadow: 0 1px 0 rgba(0,0,0,.03);
-  line-height: 1.45;
-}
+    background: var(--white); border:1px solid var(--border);
+    border-radius: calc(var(--bubble-radius) * var(--cm));
+    width: 100%;
+    max-width: 100%;
+    padding: 14px 16px; box-shadow: 0 1px 0 rgba(0,0,0,.03);
+    line-height: 1.45;
+  }
 
   .title{ color:var(--neu-red); font-weight:700; font-size:20px; margin:0 0 6px 0; }
   .p{ margin:0; font-size:13px; color:var(--text); }
@@ -234,7 +235,7 @@
   const stack = document.getElementById('stack');
   const sessionId = (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2);
 
-  /* Header controls */
+  /* Header controls — PRESERVED */
   function scrollPanelToBottom(){
     const panel = document.querySelector('.body');
     if(panel){ panel.scrollTo({ top: panel.scrollHeight, behavior: 'smooth' }); }
@@ -284,7 +285,7 @@
     requestAnimationFrame(()=>scrollPanelToBottom());
   }
 
-  /* Typing indicator with avatar */
+  /* Typing indicator with avatar — PRESERVED */
   let typingRow = null;
   function showTyping(text='Assistant is typing'){
     if (typingRow) return;
@@ -313,7 +314,7 @@
     }catch(e){ hideTyping(); console.error(e); return {}; }
   }
 
-  /* Buttons container */
+  /* Buttons container — PRESERVED */
   function renderButtons(labels, handler){
     const row = document.createElement('div');
     row.className = 'row card';
@@ -361,6 +362,7 @@
     }
   }
 
+  /* ===== Inline Main Menu (does NOT restart or clear history) ===== */
   function showMainMenuInline(){
     const colleges = (START_CACHE && Array.isArray(START_CACHE.colleges))
       ? START_CACHE.colleges
@@ -403,14 +405,16 @@
     helpfulTail(lbl);
   }
 
+  /* ===== New Student — detailed flows (client-side) ===== */
   function onPickIncomingTopicOrBack(lbl){
     if (lbl === "Back to the Start") return startOver();
     STATE.topic = lbl;
 
+    // Log the topic click so Chart 2A can count New Student topics
     post('/api/v2/topic', {
       session_id: STATE.session_id,
       college: STATE.college,
-      status: STATE.status,
+      status: STATE.status,   // "New Student"
       topic: lbl
     }).catch(()=>{});
 
@@ -439,6 +443,7 @@
     helpfulTail(lbl);
   }
 
+  /* ====== Helper to log deferral/arrival choice (for dashboards) ====== */
   function logDeferralChoice(choice){
     post('/api/v2/deferral_choice', {
       session_id: STATE.session_id,
@@ -449,15 +454,16 @@
     }).catch(()=>{});
   }
 
+  /* === Helpful tail with feedback (POS + NEG) === */
   function helpfulTail(topic){
     appendBot(`<p class="p"><strong>Is there anything else you would like help with today?</strong></p>`);
     renderButtons(["Yes","No","Main Menu"], pick=>{
-      if (pick === "Yes" || pick === "Main Menu") return showMainMenuInline();
+      if (pick === "Yes" || pick === "Main Menu") return startOver();
 
       // Helpful?
       appendBot(`<p class="p"><strong>Was this information helpful?</strong></p>`);
       renderButtons(["Yes, it was helpful","No, I still need help","Main Menu"], fb=>{
-        if (fb === "Main Menu") return showMainMenuInline();
+        if (fb === "Main Menu") return startOver();
 
         if (fb.startsWith("Yes")){
           // Positive path
@@ -465,9 +471,9 @@
           appendBot(`<p class="p">That’s Great! I’m glad we were able to provide the information you needed.</p>`);
           appendBot(`<p class="p"><strong>Is there anything else I can help you with today?</strong></p>`);
           return renderButtons(["Yes","No","Main Menu"], end=>{
-            if (end === "Yes" || end === "Main Menu") return showMainMenuInline();
+            if (end === "Yes" || end === "Main Menu") return startOver();
             appendBot(`<p class="p">I’m glad I was able to help ...ay and I look forward to having you back. Till next time!</p>`);
-            renderButtons(["Main Menu"], ()=>showMainMenuInline());
+            renderButtons(["Main Menu"], ()=>startOver());
           });
         }
 
@@ -483,28 +489,52 @@
               <label><input type="checkbox" value="need_more_details"> I Need More Details</label>
             </div>
             <div style="margin-top:6px">
-              <input type="text" placeholder="Optional: add a sh...idth:100%;padding:8px;border:1px solid #bbb;border-radius:8px"/>
+              <input type="text" placeholder="Optional: add a short note (no NUIDs, please)" style="width:100%;padding:8px;border:1px solid #bbb;border-radius:8px"/>
             </div>
             <div class="row" style="margin-top:8px"><div class="btn" id="${id}_submit">Submit feedback</div></div>
           </div>
         `);
         setTimeout(()=>{
           const wrap=document.getElementById(id), btn=document.getElementById(id+'_submit');
+          if(!wrap) return;
+          const noteInput = wrap.querySelector('input[type="text"]');
+          const NUMBER_WORDS = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi;
+
+          if (noteInput){
+            noteInput.addEventListener('input', ()=>{
+              let v = noteInput.value || "";
+              // Remove any digit sequences
+              v = v.replace(/\d+/g, '');
+              // Remove common spelled-out numbers
+              v = v.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, '');
+              noteInput.value = v;
+            });
+          }
+
           if(btn){
             btn.onclick=()=>{
               const reasons=[...wrap.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
-              const note=wrap.querySelector('input[type="text"]').value||"";
+              let rawNote = noteInput ? (noteInput.value || "") : "";
+              // Final guard: block ID-like content
+              if (/\d{4,}/.test(rawNote) || NUMBER_WORDS.test(rawNote) || /nuid/i.test(rawNote)){
+                alert("For your privacy, please do not include ID numbers here.");
+                NUMBER_WORDS.lastIndex = 0;
+                return;
+              }
+              const note = rawNote;
               sendFeedback({helpful:false, topic, reasons, note});
               appendBot(`<p class="p">Thank you, your feedback h...e! I hope to be able to better support you in the future.</p>`);
-              // After capturing negative feedback, restart from the welcome + main menu flow
+              // ⬇ NEW: directly restart welcome + main menu
               startOver();
             };
           }
+          scrollPanelToBottom();
         },0);
       });
     });
   }
 
+  // Use the actual selected status (no hard-coded label)
   function sendFeedback(payload){
     const body = JSON.stringify({
       session_id: sessionId,
@@ -526,6 +556,7 @@
   }
 
   async function startOver(){
+    // Only when user explicitly clicks "Back to the Start" or we call it
     const data = await post('/api/v2/start_over', {session_id: STATE.session_id});
     STATE = { session_id: STATE.session_id, college:null, status:null, topic:null };
     if (data.title) appendBot(`<h3 class="title">${data.title}</h3>`);
