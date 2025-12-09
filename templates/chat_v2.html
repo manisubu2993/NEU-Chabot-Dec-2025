@@ -7,490 +7,234 @@
   <style>
   :root{
     --cm: 37.8px; /* 1cm ≈ 37.8px */
-    --neu-red:#C8102E; --text:#111;
-    --muted:#555; --border:#ddd; --bg:#f6f6f6;
-    --accent:#004990; --accent-soft:#e5f0ff;
-    --shadow:0 6px 20px rgba(0,0,0,.15);
-    --radius:10px;
-    --btn-radius:999px;
-    --header-h: calc(1.1 * var(--cm));
+    --neu-red:#C8102E; --text:#111; --muted:#666; --border:#DBDBDB; --white:#FFF;
+    --bubble-w: 7.2;        /* cm */
+    --bubble-r-offset: 0.3;  /* cm from right wall */
+    --bubble-v-gap: 0.3;     /* cm vertical gap */
+    --bubble-radius: 0.25;   /* cm */
+    --btn-h: 0.8;            /* cm */
+
+    --body-padding: 0.5;     /* cm */
+    --panel-max-h: 12;       /* cm */
   }
 
   *{ box-sizing:border-box; margin:0; padding:0; }
-
   body{
-    font-family: 'Lato', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    background: transparent;
+    font-family:'Lato',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+    background:transparent;
     color:var(--text);
   }
 
-  /* Outer "card" window */
   .window{
-    width: 100%;
-    max-width: 350px;
-    margin: 8px auto;     /* NEW: center nicely inside the frame */
-    /* min-height removed to avoid extra white space */
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: 0 6px 20px rgba(0,0,0,.12);
-    position: relative;
-    overflow: hidden;
-    transition: width .2s ease, height .2s ease, max-height .2s ease;
+  width: 100%;
+  max-width: 350px;
+  margin: 8px auto;     /* center inside frame */
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12);
+  position: relative;
+  overflow: hidden;
+  transition: width .2s ease, height .2s ease, max-height .2s ease;
+}
+
+  .window.max{
+    max-width:none;
+    width:100%;
+    max-height:none;
   }
 
   .header{
-    display:flex;
-    align-items:center;
-    gap:calc(0.4 * var(--cm));
-    padding:calc(0.4 * var(--cm)) calc(0.5 * var(--cm));
-    border-bottom:1px solid var(--border);
-    background: linear-gradient(120deg,#fef6f7,#fff);
-    min-height: var(--header-h);
+    position: sticky; top: 0; z-index: 5;
+    height: calc(3 * var(--cm)); background: #000;
+    display:flex; align-items:center; padding: 0 calc(0.5 * var(--cm));
+    border-bottom: 1px solid #000;
   }
-  .logo-wrap{
-    width:calc(1.4 * var(--cm));
-    height:calc(1.4 * var(--cm));
-    flex-shrink:0;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  }
-  .logo-wrap img{
-    width:100%;
-    height:auto;
-    display:block;
-    border-radius:6px;
-  }
-  .header-text{ flex:1; min-width:0; }
-  .title{
-    font-size:14px;
-    font-weight:800;
-    color:#000;
-    letter-spacing:.02em;
-    margin-bottom:2px;
-  }
-  .subtitle{
-    font-size:11px;
-    color:var(--muted);
-    line-height:1.3;
-  }
+  .header .logo{ height: calc(1 * var(--cm)); margin-left: calc(1.25 * var(--cm)); }
+ .header .actions{
+  margin-left: auto;
+  display: none;             /* hide maximize / close UI */
+  gap:12px;
+  position: relative;
+  right: calc(0.25 * var(--cm));
+}
+  .icon-btn{ width: calc(0.5 * var(--cm)); height: calc(0.5 * var(--cm)); cursor:pointer; user-select:none; display:block; }
+  .icon-btn svg{ width:100%; height:100%; display:block; fill:#fff; }
 
-  .header-actions{
-    display:flex;
-    flex-direction:column;
-    align-items:flex-end;
-    gap:2px;
-    margin-left:6px;
+  .skyline{
+    position:absolute; left:0; right:0; bottom:0;
+    height: calc(11 * var(--cm));
+    background: url("{{ url_for('static', filename='skyline.jpg') }}") center/cover no-repeat;
+    opacity:.05; pointer-events:none;
   }
-
-  .tag{
-    font-size:9px;
-    padding:2px 6px;
-    border-radius:999px;
-    background:var(--accent-soft);
-    color:var(--accent);
-    font-weight:600;
-    white-space:nowrap;
-  }
-
-  .win-controls{
-    display:flex;
-    gap:2px;
-    margin-top:2px;
-  }
-  .icon-btn{
-    width:18px; height:18px;
-    border-radius:50%;
-    border:none;
-    background:#eee;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    cursor:pointer;
-    font-size:11px;
-    line-height:1;
-    padding:0;
-  }
-  .icon-btn span{ transform:translateY(-1px); }
-  #btn-max{ background:#e8f0ff; color:#004990; }
-  #btn-min{ background:#fce9e9; color:#b00020; }
-  #btn-exit{
-    width:auto;
-    padding:0 8px;
-    border-radius:999px;
-    font-size:10px;
-    background:#f4f4f4;
-    color:#333;
-  }
-  #btn-exit span{ transform:none; }
 
   .body{
-    position: relative;
-    padding: calc(0.5 * var(--cm));
-    padding-top: calc(0.75 * var(--cm));
-    max-height: calc(12 * var(--cm));
-    overflow-y: auto;
-    overflow-x: hidden;   /* NEW */
-  }
-
-  .body::-webkit-scrollbar{
-    width:6px;
-  }
-  .body::-webkit-scrollbar-thumb{
-    background:#ccc;
-    border-radius:999px;
-  }
-
+  position: relative;
+  padding: calc(0.5 * var(--cm));
+  padding-top: calc(0.75 * var(--cm));
+  max-height: calc(12 * var(--cm));
+  overflow-y: auto;
+  overflow-x: hidden;
+}
   .stack{ min-height: 0; padding-bottom: calc(0.5 * var(--cm)); }
 
-  /* === Chat bubble row with avatar (N beside every bot bubble) === */
+  .body::-webkit-scrollbar{ width:5px; }
+  .body::-webkit-scrollbar-thumb{
+    background:rgba(0,0,0,.15);
+    border-radius:999px;
+  }
+  .body{ scrollbar-width:thin; scrollbar-color:rgba(0,0,0,.15) transparent; }
+
   .bubble-row{
-    display:flex; justify-content:flex-end; align-items:flex-start;
-    gap: calc(0.25 * var(--cm));
-    margin-bottom: calc(0.3 * var(--cm));
+    display:flex;
+    align-items:flex-start;
+    justify-content:flex-end;
+    gap: calc(0.2 * var(--cm));
+    margin-bottom: calc(var(--bubble-v-gap) * var(--cm));
   }
   .bubble-avatar{
-    width:24px; height:24px;
+    width: calc(0.7 * var(--cm));
+    height: calc(0.7 * var(--cm));
     border-radius:50%;
     overflow:hidden;
     flex-shrink:0;
-    display:flex;
-    align-items:center;
-    justify-content:center;
     background:#fff;
-    border:1px solid #eee;
+    border:1px solid rgba(0,0,0,.08);
+    display:flex; align-items:center; justify-content:center;
   }
   .bubble-avatar img{
     width:100%; height:100%; object-fit:cover;
   }
+
   .card{
-    background:#fff;
-    border-radius:12px;
-    border:1px solid var(--border);
-    padding:8px 10px;
-    box-shadow:0 2px 8px rgba(0,0,0,.05);
-    font-size:11px;
-    line-height:1.45;
-    max-width: 240px;
-    color:#111;
-    text-align:left;   /* NEW: align text left for readability */
+  background: var(--white); border:1px solid var(--border);
+  border-radius: calc(var(--bubble-radius) * var(--cm));
+  width: 100%;
+  max-width: 100%;
+  padding: 14px 16px; box-shadow: 0 1px 0 rgba(0,0,0,.03);
+  line-height: 1.45;
+}
+
+  .title{ color:var(--neu-red); font-weight:700; font-size:20px; margin:0 0 6px 0; }
+  .p{ margin:0; font-size:13px; color:var(--text); }
+
+  /* Typing indicator bubble */
+  .typing{ display:flex; align-items:center; gap:6px; color:var(--muted); }
+  .typing .dots{ display:inline-flex; gap:4px }
+  .typing .dots span{
+    width:4px; height:4px; border-radius:50%;
+    background:var(--muted); opacity:.4;
+    animation:blink 1s infinite ease-in-out;
   }
+  .typing .dots span:nth-child(2){ animation-delay:.15s; }
+  .typing .dots span:nth-child(3){ animation-delay:.3s; }
 
-  .p{ margin-bottom:6px; font-size:11px; line-height:1.5; color:#222; }
-
-  .p strong{ font-weight:700; }
-  .p a{ color:var(--accent); text-decoration:none; }
-  .p a:hover{ text-decoration:underline; }
+  @keyframes blink{
+    0%,100%{ transform:translateY(0); opacity:.3; }
+    50%{ transform:translateY(-1px); opacity:1; }
+  }
 
   .row{
     display:flex;
     flex-wrap:wrap;
-    gap:5px;
-    margin-top:4px;
+    gap: calc(0.25 * var(--cm));
+    margin-top: calc(0.25 * var(--cm));
   }
-
   .btn{
-    font-size:11px;
-    padding:6px 10px;
     border-radius:999px;
-    border:1px solid #ccc;
-    background:#fafafa;
-    cursor:pointer;
-    white-space:nowrap;
-    transition:background .15s ease, transform .1s ease, box-shadow .15s ease;
-    box-shadow:0 1px 3px rgba(0,0,0,.08);
-  }
-  .btn:hover{
-    background:#f0f0f0;
-    transform:translateY(-0.5px);
-    box-shadow:0 2px 5px rgba(0,0,0,.12);
-  }
-  .btn-primary{
-    background:var(--accent);
-    color:#fff;
-    border-color:var(--accent);
-  }
-  .btn-primary:hover{
-    background:#003369;
-  }
-
-  .btn-secondary{
-    background:#fff;
-    color:#333;
-  }
-
-  /* Small heading inside cards */
-  .card h3{
+    border:1px solid #CCC;
+    padding:0 calc(0.5 * var(--cm));
+    height: calc(var(--btn-h) * var(--cm));
     font-size:11px;
-    margin-bottom:3px;
-    font-weight:700;
-  }
-
-  .tagline{
-    font-size:10px;
-    color:#777;
-    margin-top:3px;
-  }
-
-  /* You bubble (user) */
-  .you{
-    align-self:flex-end;
-    background:#ebf4ff;
-    border-color:#c4dcff;
-  }
-  .you .p{ color:#123; }
-
-  /* Quick categories / sections */
-  .section-title{
-    font-weight:700;
-    font-size:11px;
-    margin:6px 0 4px;
-  }
-
-  /* Kebab menu area (future use if needed) */
-  .kebab-wrap{
-    position:absolute;
-    top:6px;
-    right:6px;
-  }
-
-  .typing{
-    display:inline-block;
-    padding:2px 0;
-    color:#999;
-    font-size:10px;
-  }
-
-  /* Tiny icon in header title (location pin) */
-  .title-row{
-    display:flex;
-    align-items:center;
-    gap:4px;
-  }
-  .title-row svg{
-    width:12px; height:12px;
-    flex-shrink:0;
-  }
-
-  .meta-line{
-    font-size:9px;
-    color:#999;
-    margin-top:2px;
-  }
-
-  /* Prevent text selection glitches */
-  .btn, a{ -webkit-tap-highlight-color: transparent; }
-
-  /* Make sure long content wraps nicely */
-  .card p, .card li{
-    word-wrap:break-word;
-    word-break:break-word;
-  }
-
-  /* Simple list styling inside card */
-  ul{
-    padding-left:18px;
-    margin:4px 0;
-  }
-  li{
-    margin-bottom:2px;
-  }
-
-  /* Radio group styling for deferrals / arrivals etc. */
-  .options-label{
-    font-size:10px;
-    margin-bottom:4px;
-    color:#444;
-  }
-  .options-group{
-    display:flex;
-    flex-wrap:wrap;
-    gap:5px;
-    margin-top:3px;
-  }
-  .options-group label{
-    font-size:10px;
-    display:flex;
-    align-items:center;
-    gap:3px;
-  }
-  .options-group input[type="radio"]{
-    transform:scale(0.9);
-  }
-
-  /* Responsive tweak: at very small widths, reduce padding */
-  @media (max-width:360px){
-    .window{
-      margin:4px auto;
-    }
-    .body{
-      padding:8px;
-      padding-top:10px;
-    }
-  }
-
-  /* Add a gentle background behind the whole window (but keep transparent page) */
-  :root{ --white:#ffffff; }
-
-  /* New: subtle "NEU" watermark style (used in header title icon) */
-  .icon-n{
-    display:inline-block;
-    font-size:9px;
-    font-weight:900;
-    letter-spacing:.08em;
-    text-transform:uppercase;
-  }
-
-  /* For the “typing” bubble row */
-  .typing-row{
-    display:flex;
-    align-items:center;
-    gap:5px;
-    margin-top:4px;
-  }
-  .typing-dots span{
-    display:inline-block;
-    width:4px; height:4px;
-    border-radius:50%;
-    background:#bbb;
-    margin-right:3px;
-    animation:blink 1s infinite ease-in-out;
-  }
-  .typing-dots span:nth-child(2){ animation-delay:.2s; }
-  .typing-dots span:nth-child(3){ animation-delay:.4s; }
-
-  @keyframes blink{
-    0%, 20%{ opacity:0.2; transform:translateY(0); }
-    50%{ opacity:1; transform:translateY(-1px); }
-    100%{ opacity:0.2; transform:translateY(0); }
-  }
-
-  /* Ensure buttons wrap cleanly inside card width */
-  .row .btn{
-    max-width:100%;
-  }
-
-  /* Little "powered by" footer (if needed later) */
-  .footer-note{
-    font-size:9px;
-    color:#999;
-    text-align:right;
-    margin-top:4px;
-  }
-
-  /* Keep the card pinned visually to top of window when little content */
-  .body-inner{
-    min-height:0;
-  }
-
-  /* NEW: ensure scrollable region stops before window edge */
-  #win{
-    max-height: calc(14 * var(--cm));
-  }
-
-  /* Fine–tune header text when wrapping */
-  .title-row .label{
-    white-space:nowrap;
-  }
-
-  .subtitle strong{
-    font-weight:700;
-    color:#333;
-  }
-
-  /* “Toronto Campus” pill */
-  .campus-pill{
-    display:inline-flex;
-    align-items:center;
-    gap:4px;
-    background:#fff;
-    border-radius:999px;
-    padding:2px 8px;
-    border:1px solid #e0e0e0;
-    font-size:9px;
-    margin-top:2px;
-  }
-  .campus-pill span.icon{
-    width:12px; height:12px;
-    border-radius:50%;
-    background:#c8102e;
     display:inline-flex;
     align-items:center;
     justify-content:center;
+    background:#f9f9f9;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:background .15s ease, box-shadow .15s ease, transform .1s ease;
+  }
+  .btn:hover{
+    background:#efefef;
+    box-shadow:0 1px 3px rgba(0,0,0,.12);
+    transform:translateY(-0.5px);
+  }
+  .btn.selected,
+  .btn:active{
+    background:var(--neu-red);
     color:#fff;
-    font-size:8px;
+    border-color:var(--neu-red);
+    box-shadow:0 0 0 1px rgba(200,16,46,.35);
   }
 
-  /* Tiny chevron beside Main Menu if we use it */
-  .btn .chevron{
-    font-size:9px;
-    margin-left:2px;
+  a{ color:#004990; text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+
+  ul{ margin:6px 0 0 1.1em; padding:0; }
+  li{ margin:2px 0; font-size:13px; }
+
+  .meta{ margin-top:6px; font-size:11px; color:#777; }
+  .disclaimer{
+    font-size:11px; margin-top:8px; color:#555;
+    border-top:1px dashed #E0E0E0; padding-top:6px;
   }
 
-  /* Ensure radio buttons not squashed */
-  .card .row-options{
-    flex-wrap:wrap;
-    gap:6px;
+  .you{
+    background:#EAF3FF;
+    border-color:#BFD7FF;
   }
 
-  /* Hide native scrollbars in Firefox just a bit */
-  .body{
-    scrollbar-width:thin;
-    scrollbar-color:#ccc transparent;
+  @media (max-width:420px){
+    .window{ margin:4px auto; }
+    .header{ padding:0 calc(0.25 * var(--cm)); }
+    .header .logo{ margin-left: calc(0.5 * var(--cm)); height: calc(0.9 * var(--cm)); }
   }
+
   </style>
 </head>
 <body>
   <div class="window" id="win">
     <div class="header">
-      <div class="logo-wrap">
-        <img src="{{ url_for('static', filename='img/monogram-with-background.png') }}" alt="Northeastern University Toronto logo">
-      </div>
-      <div class="header-text">
-        <div class="title-row">
-          <span class="icon-n">NU</span>
-          <span class="label">Toronto Campus Assistant</span>
-        </div>
-        <div class="subtitle">
-          One-stop assistant for <strong>Toronto</strong> student life questions.
-        </div>
-        <div class="campus-pill">
-          <span class="icon">T</span>
-          <span>Toronto Campus</span>
-        </div>
-      </div>
-      <div class="header-actions">
-        <div class="tag">Beta · v2</div>
-        <div class="win-controls">
-          <button class="icon-btn" id="btn-max" title="Maximize chatbot"><span>⬜</span></button>
-          <button class="icon-btn" id="btn-min" title="Minimize chatbot"><span>▁</span></button>
-        </div>
-        <button class="icon-btn" id="btn-exit" title="Close chatbot"><span>Exit</span></button>
+      <!-- PRESERVED LOGO -->
+      <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Northeastern University">
+
+      <!-- Inline SVG controls (minimize/maximize/close) -->
+      <div class="actions">
+        <!-- Maximize -->
+        <span id="btn-max" class="icon-btn" title="Maximize">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5" y="5" width="14" height="14" fill="none" stroke="#fff" stroke-width="2"/>
+          </svg>
+        </span>
+        <!-- Minimize (hidden until maximized) -->
+        <span id="btn-min" class="icon-btn" title="Minimize" style="display:none;">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5" y="11" width="14" height="2" fill="#fff"/>
+          </svg>
+        </span>
+        <!-- Close -->
+        <span id="btn-exit" class="icon-btn" title="Exit">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="6" y1="6" x2="18" y2="18" stroke="#fff" stroke-width="2"/>
+            <line x1="18" y1="6" x2="6" y2="18" stroke="#fff" stroke-width="2"/>
+          </svg>
+        </span>
       </div>
     </div>
 
+    <div class="skyline" aria-hidden="true"></div>
+
     <div class="body">
-      <div class="body-inner">
-        <div class="stack" id="stack">
-          <!-- Chat bubbles injected here -->
-        </div>
+      <div class="stack" id="stack">
       </div>
     </div>
   </div>
 
   <script>
-  // === Simple state to keep track of student type & college ===
-  const STATE = {
-    status: null,
-    college: null
-  };
-
-  // Synthetic session id for feedback mapping
-  const sessionId = (Math.random().toString(36).slice(2) + Date.now().toString(36));
-
   const stack = document.getElementById('stack');
+  const sessionId = (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2);
 
+  /* Header controls */
   function scrollPanelToBottom(){
     const panel = document.querySelector('.body');
     if(panel){ panel.scrollTo({ top: panel.scrollHeight, behavior: 'smooth' }); }
@@ -502,22 +246,26 @@
   const btnExit = document.getElementById('btn-exit');
 
   btnMax.addEventListener('click', ()=>{
-    win.style.maxWidth = '100%';
-    win.style.width = '100%';
-    win.style.maxHeight = 'none';
-    btnMax.style.display = 'none';
-    btnMin.style.display = 'inline-block';
+    win.classList.add('max');
+    btnMax.style.display='none';
+    btnMin.style.display='';
   });
   btnMin.addEventListener('click', ()=>{
-    win.style.maxWidth = '350px';
-    win.style.width = '100%';
-    win.style.maxHeight = 'calc(14 * var(--cm))';
-    btnMin.style.display = 'none';
-    btnMax.style.display = 'inline-block';
+    win.classList.remove('max');
+    btnMin.style.display='none';
+    btnMax.style.display='';
   });
-  btnExit.addEventListener('click', ()=>{ window.history.back(); });
+  btnExit.addEventListener('click', ()=>{
+    try{
+      if (window.parent && typeof window.parent.closeChatbot === 'function'){
+        window.parent.closeChatbot();
+        return;
+      }
+    }catch(e){}
+    window.close();
+  });
 
-  /* Bubble helpers (avatar + bubble) — PRESERVED */
+  /* Bubble with avatar on the right */
   function appendBot(html){
     const row = document.createElement('div');
     row.className = 'bubble-row';
@@ -536,7 +284,7 @@
     requestAnimationFrame(()=>scrollPanelToBottom());
   }
 
-  /* Typing indicator with avatar — PRESERVED */
+  /* Typing indicator with avatar */
   let typingRow = null;
   function showTyping(text='Assistant is typing'){
     if (typingRow) return;
@@ -546,493 +294,161 @@
       <div class="bubble-avatar">
         <img src="{{ url_for('static', filename='img/monogram-with-background.png') }}" alt="NU typing icon">
       </div>
-      <div class="card">
-        <div class="typing-row">
-          <div class="typing-dots">
-            <span></span><span></span><span></span>
-          </div>
-          <span class="typing">${text}</span>
-        </div>
+      <div class="card typing">
+        <span>${text}</span>
+        <span class="dots"><span></span><span></span><span></span></span>
       </div>
     `;
     stack.appendChild(typingRow);
     scrollPanelToBottom();
   }
-  function hideTyping(){
-    if (!typingRow) return;
-    typingRow.remove();
-    typingRow = null;
+  function hideTyping(){ if (!typingRow) return; typingRow.remove(); typingRow = null; }
+
+  async function post(url, payload){
+    try{
+      showTyping();
+      const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const data = await res.json();
+      hideTyping(); return data;
+    }catch(e){ hideTyping(); console.error(e); return {}; }
   }
 
-  function appendYou(text){
+  /* Buttons container */
+  function renderButtons(labels, handler){
     const row = document.createElement('div');
-    row.className = 'bubble-row';
-    const bubble = document.createElement('div');
-    bubble.className = 'card you';
-    bubble.innerHTML = `<p class="p">${text}</p>`;
-    row.appendChild(bubble);
-    stack.appendChild(row);
-    scrollPanelToBottom();
-  }
-
-  /* Render a row of buttons, reusing the "row" + "btn" styles */
-  function renderButtons(labels, onClick){
-    const row = document.createElement('div');
-    row.className = 'row';
-    labels.forEach(label=>{
-      const btn = document.createElement('div');
-      btn.className = 'btn';
-      btn.textContent = label;
-      btn.addEventListener('click', ()=>{
-        onClick(label);
-      });
-      row.appendChild(btn);
+    row.className = 'row card';
+    labels.forEach(lbl=>{
+      const b = document.createElement('div');
+      b.className = 'btn';
+      b.textContent = lbl;
+      b.onclick = ()=>{
+        [...row.querySelectorAll('.btn')].forEach(x=>x.classList.remove('selected'));
+        b.classList.add('selected');
+        handler(lbl);
+      };
+      row.appendChild(b);
     });
     stack.appendChild(row);
     scrollPanelToBottom();
   }
 
-  /* First question: status selection, then update STATE.status */
-  function askStatus(){
-    appendBot(`<p class="p"><strong>Welcome! Let’s get started.</strong><br/>First, how would you describe your status?</p>`);
-    renderButtons(
-      ["New Student","Current Student","Alumni","Prospective Student","Faculty/Staff","Other"],
-      choice=>{
-        STATE.status = choice;             // store status
-        appendYou(choice);
-        askCollege();                      // next: college
-      }
-    );
-  }
+  /* STATE used both client & server */
+  let STATE = {
+    session_id: sessionId,
+    college: null,
+    status: null,
+    topic: null
+  };
 
-  /* Second question: college selection, then update STATE.college */
-  function askCollege(){
-    appendBot(`<p class="p">Thanks! Which Northeastern college is most relevant to your question?</p>`);
-    renderButtons(
-      ["CPS (College of Professional Studies)",
-       "COE (College of Engineering)",
-       "COS (College of Science)",
-       "DMSB (D’Amore-McKim School of Business)",
-       "Other / Not Sure"],
-      choice=>{
-        appendYou(choice);
-        if (choice.includes("CPS")) STATE.college = "CPS";
-        else if (choice.includes("COE")) STATE.college = "COE";
-        else if (choice.includes("COS")) STATE.college = "COS";
-        else if (choice.includes("DMSB")) STATE.college = "DMSB";
-        else STATE.college = "Other";
+  let START_CACHE = null;
 
-        showMainMenu();
-      }
-    );
-  }
+  async function init(){
+    const data = await post('/api/v2/start', {session_id: STATE.session_id});
+    STATE.college = null; STATE.status = null; STATE.topic = null;
 
-  function showMainMenu(){
-    appendBot(`
-      <p class="p"><strong>How can I help you today?</strong></p>
-      <p class="p">Select the option that best matches your question. You can always come back to this menu.</p>
-    `);
-    renderButtons(
-      [
-        "New Student Onboarding",
-        "Course Registration & Planning",
-        "Fees, Payments & Funding",
-        "Immigration, Study Permit & Travel",
-        "Career Services & Co-op/Internships",
-        "Deferrals & Late Arrivals",
-        "Campus Life & Student Support",
-        "Technical / Systems Support",
-        "Graduation & Program Completion",
-        "Other / Not Listed"
-      ],
-      handleMainSelection
-    );
+    if (data.title) appendBot(`<h3 class="title">${data.title}</h3>`);
+    if (data.intro){
+      String(data.intro).split('<br>').map(s => s.trim()).filter(Boolean).forEach(part => {
+        appendBot(`<p class="p">${part}</p>`);
+      });
+    }
+    if (Array.isArray(data.colleges)) {
+      START_CACHE = data;  // cache for inline Main Menu later
+      renderButtons(data.colleges, onPickCollege);
+    }
+    if (data.disclaimer){
+      appendBot(`<p class="disclaimer">${data.disclaimer}</p>`);
+    }
   }
 
   function showMainMenuInline(){
-    appendBot(`<p class="p"><strong>Back to main menu.</strong><br/>How else can I help you today?</p>`);
-    renderButtons(
-      [
-        "New Student Onboarding",
-        "Course Registration & Planning",
-        "Fees, Payments & Funding",
-        "Immigration, Study Permit & Travel",
-        "Career Services & Co-op/Internships",
-        "Deferrals & Late Arrivals",
-        "Campus Life & Student Support",
-        "Technical / Systems Support",
-        "Graduation & Program Completion",
-        "Other / Not Listed"
-      ],
-      handleMainSelection
-    );
+    const colleges = (START_CACHE && Array.isArray(START_CACHE.colleges))
+      ? START_CACHE.colleges
+      : ["Incoming Student","Continuing Student"];
+    appendBot(`<p class="p"><strong>Main Menu</strong> — choose an option to continue.</p>`);
+    renderButtons(colleges, onPickCollege);
   }
 
-  function handleMainSelection(label){
-    appendYou(label);
-
-    if (label === "New Student Onboarding")      return topicNewStudent();
-    if (label === "Course Registration & Planning") return topicRegistration();
-    if (label === "Fees, Payments & Funding")   return topicFees();
-    if (label === "Immigration, Study Permit & Travel") return topicImmigration();
-    if (label === "Career Services & Co-op/Internships") return topicCareer();
-    if (label === "Deferrals & Late Arrivals")  return topicDeferrals();
-    if (label === "Campus Life & Student Support") return topicCampusLife();
-    if (label === "Technical / Systems Support") return topicTechSupport();
-    if (label === "Graduation & Program Completion") return topicGraduation();
-    if (label === "Other / Not Listed") return topicOther();
+  async function onPickCollege(lbl){
+    STATE.college = lbl;
+    const data = await post('/api/v2/college', {session_id: STATE.session_id, college: lbl});
+    if (data.prompt) appendBot(`<p class="p">${data.prompt}</p>`);
+    if (Array.isArray(data.statuses)) renderButtons(data.statuses, onPickStatus);
   }
 
-  /* ========== TOPIC HANDLERS ========== */
-  function topicNewStudent(){
-    const topic = "New Student Onboarding";
-    appendBot(`
-      <p class="p"><strong>New Student Onboarding – Toronto Campus</strong></p>
-      <p class="p">Here are some popular areas new students ask about:</p>
-      <ul>
-        <li>Next steps after receiving your offer & paying your deposit</li>
-        <li>Setting up your online accounts (myNortheastern, NU email, MFA, etc.)</li>
-        <li>Understanding your program start date & orientation</li>
-        <li>Finding your class schedule and key academic dates</li>
-      </ul>
-      <p class="p">Please choose what you’d like to explore:</p>
-    `);
-    renderButtons(
-      [
-        "I’m newly admitted – what are my next steps?",
-        "How do I find my program and course start dates?",
-        "How do I activate my Northeastern accounts?",
-        "Where do I see my timetable / class schedule?",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p"><strong>For detailed & up-to-date onboarding steps:</strong></p>
-          <p class="p">
-            Please visit the official Toronto campus site:<br/>
-            <a href="https://toronto.northeastern.edu/student-life/" target="_blank" rel="noopener">Toronto Student Life – Getting Started</a>
-          </p>
-          <p class="p">
-            For individualized support (program-specific questions, start dates, orientation details), please email:<br/>
-            <strong><a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></strong>
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
+  async function onPickStatus(lbl){
+    STATE.status = lbl;
+    const data = await post('/api/v2/status', {session_id: STATE.session_id, college: STATE.college, status: lbl});
+    if (data.prompt) appendBot(`<p class="p">${data.prompt}</p>`);
+    if (Array.isArray(data.topics)) renderButtons(data.topics, onPickTopic);
   }
 
-  function topicRegistration(){
-    const topic = "Course Registration & Planning";
-    appendBot(`
-      <p class="p"><strong>Course Registration & Planning</strong></p>
-      <p class="p">Common questions include:</p>
-      <ul>
-        <li>When and how to register for courses</li>
-        <li>Who approves your study plan</li>
-        <li>Adding/dropping courses or swapping sections</li>
-        <li>Understanding full-time load and prerequisites</li>
-      </ul>
-      <p class="p">Please select what best matches your question.</p>
-    `);
-    renderButtons(
-      [
-        "When can I register for courses?",
-        "How do I build my course plan?",
-        "I need help adding/dropping a course",
-        "Who do I contact for academic advising?",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p">
-            For official registration timelines and instructions, please refer to:<br/>
-            <a href="https://registrar.northeastern.edu/article/registration-information/" target="_blank" rel="noopener">
-              Northeastern Registrar – Registration Information
-            </a>
-          </p>
-          <p class="p">
-            For program-specific academic advising or support with your plan, please email:<br/>
-            <strong><a href="mailto:torontoacademicadvising@northeastern.edu">torontoacademicadvising@northeastern.edu</a></strong>
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
+  async function onPickTopic(lbl){
+    STATE.topic = lbl;
+    const data = await post('/api/v2/topic', {
+      session_id: STATE.session_id,
+      college: STATE.college,
+      status: STATE.status,
+      topic: lbl
+    });
+    if (data.answer){
+      String(data.answer).split('<br>').map(s => s.trim()).filter(Boolean).forEach(part => {
+        appendBot(`<p class="p">${part}</p>`);
+      });
+    }
+    if (data.links && Array.isArray(data.links)){
+      const listHtml = data.links.map(l => `<li><a href="${l.href}" target="_blank" rel="noopener">${l.label}</a></li>`).join('');
+      appendBot(`<ul>${listHtml}</ul>`);
+    }
+    helpfulTail(lbl);
   }
 
-  function topicFees(){
-    const topic = "Fees, Payments & Funding";
-    appendBot(`
-      <p class="p"><strong>Fees, Payments & Funding</strong></p>
-      <p class="p">What would you like help with?</p>
-    `);
-    renderButtons(
-      [
-        "Tuition & fee amounts",
-        "Payment deadlines and methods",
-        "Late payment / holds",
-        "Scholarships or assistantships",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p">
-            For official tuition, fees, and billing details, please see Student Financial Services:<br/>
-            <a href="https://studentfinance.northeastern.edu" target="_blank" rel="noopener">
-              studentfinance.northeastern.edu
-            </a>
-          </p>
-          <p class="p">
-            For Toronto-specific tuition or payment questions, you can email:<br/>
-            <strong><a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></strong>
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
+  function onPickIncomingTopicOrBack(lbl){
+    if (lbl === "Back to the Start") return startOver();
+    STATE.topic = lbl;
+
+    post('/api/v2/topic', {
+      session_id: STATE.session_id,
+      college: STATE.college,
+      status: STATE.status,
+      topic: lbl
+    }).catch(()=>{});
+
+    if (lbl === "Offer received – what are my next steps?"){
+      appendBot(`<p class="p"><strong>After you receive your offer:</strong></p>`);
+      appendBot(`<p class="p">1. Review your offer letter carefully, including program, start term, and any conditions.</p>`);
+      appendBot(`<p class="p">2. Follow the instructions to accept your offer and pay any required deposit by the stated deadline.</p>`);
+      appendBot(`<p class="p">3. Watch for emails from the Toronto campus with onboarding and pre-arrival information.</p>`);
+      appendBot(`<p class="p"><strong>If anything in your offer is unclear, or if you see an error, please email:</strong> <a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></p>`);
+      helpfulTail(lbl);
+      return;
+    }
+
+    if (lbl === "When do I receive my timetable / class schedule?"){
+      appendBot(`<p class="p"><strong>Class schedules are not sent immediately after you receive an offer.</strong></p>`);
+      appendBot(`<p class="p">You will typically see your course schedule after:</p>`);
+      appendBot(`<p class="p">1. You have accepted your offer and completed any required pre-registration steps.</p>`);
+      appendBot(`<p class="p">2. You are enrolled in courses for your first term (this may involve registering yourself or being registered by your program).</p>`);
+      appendBot(`<p class="p">3. Once enrolled, you will see your class times and locations in the student systems used by your program.</p>`);
+      appendBot(`<p class="p"><strong>If you are unsure when you will receive your timetable, please email:</strong> <a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></p>`);
+      helpfulTail(lbl);
+      return;
+    }
+
+    appendBot(`<p class="p">For this topic, please email the Toronto campus team directly at <a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a> so they can review your specific situation.</p>`);
+    helpfulTail(lbl);
   }
 
-  function topicImmigration(){
-    const topic = "Immigration, Study Permit & Travel";
-    appendBot(`
-      <p class="p"><strong>Immigration, Study Permit & Travel</strong></p>
-      <p class="p">
-        Immigration rules can change, and every case is unique. For accurate guidance, it’s important to refer to official sources.
-      </p>
-      <p class="p">What would you like to ask about?</p>
-    `);
-    renderButtons(
-      [
-        "Study permit application or extension",
-        "TRV / visa stamping questions",
-        "Travel to Canada and port-of-entry",
-        "Co-op work permit / PGWP",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p">
-            Northeastern has immigration specialists who can guide you. Please contact:<br/>
-            <strong><a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></strong>
-          </p>
-          <p class="p">
-            You should also review the official Government of Canada site for the latest rules:<br/>
-            <a href="https://www.canada.ca/en/immigration-refugees-citizenship.html" target="_blank" rel="noopener">
-              Immigration, Refugees and Citizenship Canada (IRCC)
-            </a>
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
+  function logDeferralChoice(choice){
+    post('/api/v2/deferral_choice', {
+      session_id: STATE.session_id,
+      college: STATE.college,
+      status: STATE.status,
+      topic: STATE.topic,
+      choice
+    }).catch(()=>{});
   }
 
-  function topicCareer(){
-    const topic = "Career Services & Co-op/Internships";
-    appendBot(`
-      <p class="p"><strong>Career Services & Co-op/Internships</strong></p>
-      <p class="p">What would you like help with?</p>
-    `);
-    renderButtons(
-      [
-        "Co-op eligibility and process",
-        "Resume, cover letter, or LinkedIn review",
-        "Job search strategies and workshops",
-        "Networking events and employer sessions",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p">
-            For co-op and career support, Toronto students can connect with the Career and Experiential Learning team.
-          </p>
-          <p class="p">
-            Please email:<br/>
-            <strong><a href="mailto:torontocareer@northeastern.edu">torontocareer@northeastern.edu</a></strong>
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
-  }
-
-  function topicDeferrals(){
-    const topic = "Deferrals & Late Arrivals";
-    appendBot(`
-      <p class="p"><strong>Deferrals & Late Arrivals</strong></p>
-      <p class="p">What type of support do you need?</p>
-    `);
-    renderButtons(
-      [
-        "I want to request a program start deferral",
-        "I will arrive late – who should I inform?",
-        "I’m unsure if I can arrive before the deadline",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p">
-            For deferral requests or to discuss late arrival, please reach out to the Toronto campus team:
-          </p>
-          <p class="p">
-            <strong><a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></strong>
-          </p>
-          <p class="p">
-            When you email, include your full name, Northeastern ID (if applicable), program, and term so they can assist you quickly.
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
-  }
-
-  function topicCampusLife(){
-    const topic = "Campus Life & Student Support";
-    appendBot(`
-      <p class="p"><strong>Campus Life & Student Support – Toronto</strong></p>
-      <p class="p">What would you like help with?</p>
-    `);
-    renderButtons(
-      [
-        "Student life and events",
-        "Health, wellness, and counseling",
-        "Accessibility and academic supports",
-        "Clubs, communities, and networking",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p">
-            For student life, events, and support services, please visit:
-          </p>
-          <p class="p">
-            <a href="https://toronto.northeastern.edu/student-life/" target="_blank" rel="noopener">
-              Toronto Student Life
-            </a>
-          </p>
-          <p class="p">
-            For direct support or if you’re unsure where to start, you can email:<br/>
-            <strong><a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></strong>
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
-  }
-
-  function topicTechSupport(){
-    const topic = "Technical / Systems Support";
-    appendBot(`
-      <p class="p"><strong>Technical / Systems Support</strong></p>
-      <p class="p">What do you need help with?</p>
-    `);
-    renderButtons(
-      [
-        "myNortheastern / portal access issues",
-        "NU email / MFA sign-in problems",
-        "Canvas or online course access",
-        "Other technical issues",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p">
-            For system access or technical issues, please contact the Northeastern IT Service Desk.
-          </p>
-          <p class="p">
-            Visit:<br/>
-            <a href="https://its.northeastern.edu/get-help" target="_blank" rel="noopener">
-              its.northeastern.edu/get-help
-            </a>
-          </p>
-          <p class="p">
-            If you’re unsure where to start, you can also email:<br/>
-            <strong><a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></strong>
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
-  }
-
-  function topicGraduation(){
-    const topic = "Graduation & Program Completion";
-    appendBot(`
-      <p class="p"><strong>Graduation & Program Completion</strong></p>
-      <p class="p">What would you like help with?</p>
-    `);
-    renderButtons(
-      [
-        "Applying to graduate",
-        "Degree audit / meeting requirements",
-        "Convocation / ceremony information",
-        "Diploma mailing / timelines",
-        "Main Menu"
-      ],
-      choice=>{
-        appendYou(choice);
-        if (choice === "Main Menu") return showMainMenuInline();
-        appendBot(`
-          <p class="p">
-            For official graduation and degree requirements, please refer to the Registrar and your program advisor.
-          </p>
-          <p class="p">
-            You can start with:<br/>
-            <a href="https://registrar.northeastern.edu/article/apply-to-graduate/" target="_blank" rel="noopener">
-              Registrar – Apply to Graduate
-            </a>
-          </p>
-          <p class="p">
-            For program-specific questions for Toronto, please email:<br/>
-            <strong><a href="mailto:torontoacademicadvising@northeastern.edu">torontoacademicadvising@northeastern.edu</a></strong>
-          </p>
-        `);
-        helpfulTail(topic);
-      }
-    );
-  }
-
-  function topicOther(){
-    const topic = "Other / Not Listed";
-    appendBot(`
-      <p class="p"><strong>No problem!</strong></p>
-      <p class="p">If your question doesn’t fit neatly into one category, you can:</p>
-      <ul>
-        <li>Check the Toronto campus site for general information</li>
-        <li>Or email the campus team with your specific situation</li>
-      </ul>
-      <p class="p">
-        Toronto Campus site:<br/>
-        <a href="https://toronto.northeastern.edu" target="_blank" rel="noopener">
-          toronto.northeastern.edu
-        </a>
-      </p>
-      <p class="p">
-        General email for Toronto students:<br/>
-        <strong><a href="mailto:toronto@northeastern.edu">toronto@northeastern.edu</a></strong>
-      </p>
-    `);
-    helpfulTail(topic);
-  }
-
-  /* === Helpful tail with feedback (POS + NEG) === */
   function helpfulTail(topic){
     appendBot(`<p class="p"><strong>Is there anything else you would like help with today?</strong></p>`);
     renderButtons(["Yes","No","Main Menu"], pick=>{
@@ -1074,40 +490,14 @@
         `);
         setTimeout(()=>{
           const wrap=document.getElementById(id), btn=document.getElementById(id+'_submit');
-          const noteInput = wrap ? wrap.querySelector('input[type="text"]') : null;
-          const NUMBER_WORDS = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi;
-          if (noteInput){
-            noteInput.addEventListener('input', ()=>{
-              let v = noteInput.value || "";
-              v = v.replace(/\d+/g,'');
-              v = v.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi,'');
-              noteInput.value = v;
-            });
-          }
           if(btn){
             btn.onclick=()=>{
               const reasons=[...wrap.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
-              let rawNote="";
-              if (noteInput){
-                rawNote = noteInput.value || "";
-              } else {
-                const noteField = wrap.querySelector('input[type="text"]');
-                rawNote = noteField ? (noteField.value || "") : "";
-              }
-              if (/\d{4,}/.test(rawNote) || NUMBER_WORDS.test(rawNote) || /nuid/i.test(rawNote)){
-                alert("For your privacy, please do not include ID numbers here.");
-                NUMBER_WORDS.lastIndex = 0;
-                return;
-              }
-              const note=rawNote;
+              const note=wrap.querySelector('input[type="text"]').value||"";
               sendFeedback({helpful:false, topic, reasons, note});
               appendBot(`<p class="p">Thank you, your feedback h...e! I hope to be able to better support you in the future.</p>`);
-              appendBot(`<p class="p"><strong>Anything else I can help with today?</strong></p>`);
-              renderButtons(["Yes","No","Main Menu"], end=>{
-                if (end === "Yes" || end === "Main Menu") return showMainMenuInline();
-                appendBot(`<p class="p">Okay — I’m here whenever you need me.</p>`);
-                renderButtons(["Main Menu"], ()=>showMainMenuInline());
-              });
+              // After capturing negative feedback, restart from the welcome + main menu flow
+              startOver();
             };
           }
         },0);
@@ -1115,7 +505,6 @@
     });
   }
 
-  // Use the actual selected status (no hard-coded label)
   function sendFeedback(payload){
     const body = JSON.stringify({
       session_id: sessionId,
@@ -1124,36 +513,40 @@
       ...payload
     });
     if (navigator.sendBeacon){
-      try{ navigator.sendBeacon('/api/v2/feedback', new Blob([body],{type:'application/json'})); return; }catch(e){}
+      try{
+        navigator.sendBeacon('/api/v2/feedback', new Blob([body], {type:'application/json'}));
+        return;
+      }catch(e){}
     }
-    fetch('/api/v2/feedback',{
+    fetch('/api/v2/feedback', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body
     }).catch(()=>{});
   }
 
-  // Initial greeting & start flow
-  function initChat(){
-    appendBot(`
-      <p class="p"><strong>Hi! I’m your Northeastern University Toronto Campus assistant.</strong></p>
-      <p class="p">
-        I can help you find the right information or contact for topics like:
-      </p>
-      <ul>
-        <li>New student onboarding and program start</li>
-        <li>Course registration and academic advising</li>
-        <li>Fees, funding, and payments</li>
-        <li>Immigration, study permits, and travel</li>
-        <li>Career services, co-op, and internships</li>
-        <li>Deferrals, late arrivals, and more</li>
-      </ul>
-      <p class="p">Let’s start with a couple of quick questions so I can better guide you.</p>
-    `);
-    askStatus();
+  async function startOver(){
+    const data = await post('/api/v2/start_over', {session_id: STATE.session_id});
+    STATE = { session_id: STATE.session_id, college:null, status:null, topic:null };
+    if (data.title) appendBot(`<h3 class="title">${data.title}</h3>`);
+    if (data.intro){
+      String(data.intro).split('<br>').map(s => s.trim()).filter(Boolean).forEach(part => {
+        appendBot(`<p class="p">${part}</p>`);
+      });
+    }
+    if (Array.isArray(data.colleges)) {
+      START_CACHE = data;
+      renderButtons(data.colleges, onPickCollege);
+    }
   }
 
-  document.addEventListener('DOMContentLoaded', initChat);
+  window.addEventListener('beforeunload', ()=> {
+    navigator.sendBeacon('/api/v2/feedback', new Blob([JSON.stringify({
+      session_id: STATE.session_id, choice: 'end'
+    })], {type:'application/json'}));
+  });
+
+  document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
