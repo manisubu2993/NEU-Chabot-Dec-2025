@@ -387,64 +387,84 @@
         }
 
         // Negative path
-        const id = 'neg_' + Math.random().toString(36).slice(2);
-        appendBot(`
-          <div class="p" id="${id}">
-            I’m sorry I couldn’t help you find what you were looking for today. Please let me know what you feel needs improving.
-            <div style="margin-top:6px">
-              <label><input type="checkbox" value="incorrect"> Information is Incorrect</label><br/>
-              <label><input type="checkbox" value="not_relevant"> Information is Not Relevant</label><br/>
-              <label><input type="checkbox" value="unclear"> Information is Unclear</label><br/>
-              <label><input type="checkbox" value="need_more_details"> I Need More Details</label>
-            </div>
-            <div style="margin-top:6px">
-              <input type="text" placeholder="Optional: add a short note" style="width:100%;padding:8px;border:1px solid #bbb;border-radius:8px"/>
-            </div>
-            <div class="row" style="margin-top:8px"><div class="btn" id="${id}_submit">Submit feedback</div></div>
-          </div>
-        `);
-        setTimeout(()=>{
-          const wrap=document.getElementById(id), btn=document.getElementById(id+'_submit');
+      const id = 'neg_' + Math.random().toString(36).slice(2);
+      appendBot(`
+  <div class="p" id="${id}">
+    I’m sorry I couldn’t help you find what you were looking for today. Please let me know what you feel needs improving.
+    <div style="margin-top:6px">
+      <label><input type="checkbox" value="incorrect"> Information is Incorrect</label><br/>
+      <label><input type="checkbox" value="not_relevant"> Information is Not Relevant</label><br/>
+      <label><input type="checkbox" value="unclear"> Information is Unclear</label><br/>
+      <label><input type="checkbox" value="need_more_details"> I Need More Details</label>
+    </div>
 
-          // FIX: force scroll to the bottom when this block appears
-          const bodyPanel = document.querySelector('.body');
-          if(bodyPanel){
-            bodyPanel.scrollTop = bodyPanel.scrollHeight;
-          }
+    <!-- NEW CAUTION MESSAGE -->
+    <p class="p" style="margin-top:6px;color:#C8102E;font-weight:700">
+      Please don't add your personal information (e.g., NUID, emails, and phone numbers).
+    </p>
 
-          // FIX: prevent entering numeric IDs in the optional note
-          if (wrap) {
-            const noteInput = wrap.querySelector('input[type="text"]');
-            if (noteInput) {
-              noteInput.addEventListener('input', function(){
-                let t = this.value;
+    <div style="margin-top:6px">
+      <input type="text" placeholder="Optional: add a short note" style="width:100%;padding:8px;border:1px solid #bbb;border-radius:8px"/>
+    </div>
+    <div class="row" style="margin-top:8px"><div class="btn" id="${id}_submit">Submit feedback</div></div>
+  </div>
+`);
 
-                // remove digits
-                t = t.replace(/[0-9]/g, '');
+setTimeout(()=>{
+  const wrap=document.getElementById(id), btn=document.getElementById(id+'_submit');
 
-                // remove number words (case-insensitive)
-                const blockWords = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|hundred|thousand|lakh|million)\b/gi;
-                t = t.replace(blockWords, '');
-
-                this.value = t;
-              });
-            }
-          }
-
-          if(btn && wrap){
-            btn.onclick=()=>{
-              const reasons=[...wrap.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
-              const note=wrap.querySelector('input[type="text"]').value||"";
-              sendFeedback({helpful:false, topic, reasons, note});
-              appendBot(`<p class="p">Thank you, your feedback helps me improve! I hope to be able to better support you in the future.</p>`);
-              // FIX: directly show Main Menu again, no extra questions
-              renderButtons(["Main Menu"], ()=>showMainMenuInline());
-            };
-          }
-        },0);
-      });
-    });
+  // Scroll into view
+  const bodyPanel = document.querySelector('.body');
+  if(bodyPanel){
+    bodyPanel.scrollTop = bodyPanel.scrollHeight;
   }
+
+  // Enhanced validator added here
+  if (wrap) {
+    const noteInput = wrap.querySelector('input[type="text"]');
+    if (noteInput) {
+      noteInput.addEventListener('input', function(){
+        let t = this.value;
+
+        // BLOCK DIRECT EMAIL PATTERNS
+        t = t.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/gi, '');
+
+        // BLOCK INDIRECT EMAIL ATTEMPTS
+        t = t.replace(/\b(at|@)\b/gi, '');
+        t = t.replace(/\b(dot|\.com|\.ca|\.edu|\.org)\b/gi, '');
+
+        // BLOCK COMMON EMAIL DOMAINS
+        t = t.replace(/\b(gmail|hotmail|yahoo|outlook|northeastern|neu|protonmail|icloud)\b/gi, '');
+
+        // BLOCK PHONE NUMBERS
+        t = t.replace(/(\+?\d[\d\s\-().]{5,})/g, '');
+
+        // BLOCK DIGITS
+        t = t.replace(/[0-9]/g, '');
+
+        // BLOCK NUMBER WORDS
+        const blockWords = /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|hundred|thousand|million|lakh)\b/gi;
+        t = t.replace(blockWords, '');
+
+        this.value = t;
+      });
+    }
+  }
+
+  if(btn && wrap){
+    btn.onclick=()=>{
+      const reasons=[...wrap.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
+      const note=wrap.querySelector('input[type="text"]').value||"";
+      sendFeedback({helpful:false, topic, reasons, note});
+
+      appendBot(`<p class="p">Thank you, your feedback helps me improve! I hope to be able to better support you in the future.</p>`);
+
+      // DIRECT MAIN MENU RETURN (your requirement)
+      renderButtons(["Main Menu"], ()=>showMainMenuInline());
+    };
+  }
+},0);
+
 
   // Use the actual selected status (no hard-coded label)
   function sendFeedback(payload){
