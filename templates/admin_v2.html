@@ -604,13 +604,21 @@
     const topicClicks = (data.meta && data.meta.total_topic_clicks) || 0;
     const sessions    = (data.meta && data.meta.total_unique_sessions) || 0;
 
+    // --- Best-5 (non-LLM) ops signals (non-breaking) ---
+    const ops = (data && data.ops) ? data.ops : {};
+    const opsBits = [];
+    if (Number(ops.escalations) > 0) opsBits.push(`Escalations ${ops.escalations}`);
+    if (Number(ops.knowledge_gaps) > 0) opsBits.push(`Knowledge gaps ${ops.knowledge_gaps}`);
+    if (Number(ops.privacy_blocks) > 0) opsBits.push(`Privacy blocks ${ops.privacy_blocks}`);
+    const opsLine = opsBits.length ? (' • ' + opsBits.join(' • ')) : '';
+
     dom('posSummaryLine').textContent = totalFb
       ? `Feedback summary — Positive ${percent(totalPos,totalFb)} (${totalPos}/${totalFb}). Negative ${percent(totalNeg,totalFb)} (${totalNeg}/${totalFb}).`
       : `Feedback summary — No feedback in selected range.`;
 
     dom('alertQuick').textContent = sessions
-      ? `Showing ${sessions} unique sessions and ${topicClicks} topic selections for ${collegeSel || 'all colleges'} between ${start} and ${end}.`
-      : `No sessions for ${collegeSel || 'all colleges'} between ${start} and ${end}.`;
+      ? `Showing ${sessions} unique sessions and ${topicClicks} topic selections for ${collegeSel || 'all colleges'} between ${start} and ${end}.${opsLine}`
+      : `No sessions for ${collegeSel || 'all colleges'} between ${start} and ${end}.${opsLine}`;
 
     dom('alerts').innerHTML = `
       <div class="alert ok">
