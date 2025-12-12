@@ -538,6 +538,17 @@ def aggregate(events, college=None, status=None):
 
     mid = [e for e in events if e.get('type') == 'mid_use']
 
+    # --- Best-5 (non-LLM) ops signals (non-breaking additions) ---
+    privacy_blocks = [e for e in events if e.get('type') == 'privacy_block']
+    escalations    = [e for e in events if e.get('type') == 'escalation']
+    knowledge_gaps = [e for e in events if e.get('type') == 'knowledge_gap']
+
+    intent_counts = Counter()
+    for e in events:
+        it = (e.get('intent') or '').strip()
+        if it:
+            intent_counts[it] += 1
+
     meta = {
         "total_unique_sessions": len(set([e.get('session_id') for e in events if e.get('session_id')])),
         "total_topic_clicks": sum(by_topic.values())
@@ -577,6 +588,12 @@ def aggregate(events, college=None, status=None):
         "neg_top_issues": neg_top_issues,
         "feedback": feedback,
         "neg_reasons": feedback["neg_reasons"],
+        "ops": {
+            "escalations": len(escalations),
+            "knowledge_gaps": len(knowledge_gaps),
+            "privacy_blocks": len(privacy_blocks),
+            "intents": {k: int(v) for k, v in intent_counts.items()}
+        },
         "meta": meta
     }
 
