@@ -1,9 +1,11 @@
+
 # app.py — robust routing + synced analytics (multi-reason negatives, mid-use exits, context propagation)
 from flask import Flask, request, jsonify, render_template, send_file
 from datetime import datetime, timezone
 from collections import defaultdict, Counter
 import uuid, json, os
 import csv  # for free-form CSV capture
+import re   # for privacy guard + intent rules
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -133,6 +135,134 @@ def _append_freeform_csv(row):
     except Exception:
         pass
 
+
+# ---------- Best-5 enhancements (NO LLM; non-breaking, append-only) ----------
+# 1) Privacy guard (block/redact emails, NUIDs, phone numbers) for any free-form text we receive
+# 2) Rule-based intent tagging (stored alongside existing events; ignored by old dashboards unless you choose to surface it)
+# 3) Smart escalation trigger (logs an escalation event + structured summary; does not change UI)
+# 4) Structured case summary (template-based, no AI)
+# 5) Knowledge-gap logging (flags unanswered/unclear areas for continuous improvement)
+
+# --- Privacy patterns (conservative) ---
+_RE_EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+# North American-style phone numbers (very loose; catches common forms)
+_RE_PHONE = re.compile(r"(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}")
+# NUID: often 8–9 digits; we also catch 'NUID: 001234567' style
+_RE_NUID  = re.compile(r"\b(?:nuid\s*[:#-]?\s*)?\d{8,9}\b", re.IGNORECASE)
+
+def _detect_pii_types(text):
+    """Return a set of detected PII types in text. No storage of raw PII."""
+    found = set()
+    if not text:
+        return found
+    s = str(text)
+    if _RE_EMAIL.search(s): found.add("email")
+    if _RE_PHONE.search(s): found.add("phone")
+    # NUID regex may match other long numbers; we only treat it as NUID if it includes 'nuid' OR is 8-9 digits
+    # (still conservative for safety; we redact either way)
+    if _RE_NUID.search(s): found.add("nuid")
+    return found
+
+def _redact_pii(text):
+    """Redact PII from text. Returns (redacted_text, detected_types_set)."""
+    if text is None:
+        return "", set()
+    s = str(text)
+    pii = _detect_pii_types(s)
+    if not pii:
+        return s, set()
+    # Redact in a stable order
+    s = _RE_EMAIL.sub("[REDACTED_EMAIL]", s)
+    s = _RE_PHONE.sub("[REDACTED_PHONE]", s)
+    s = _RE_NUID.sub("[REDACTED_NUID]", s)
+    return s, pii
+
+def _log_privacy_if_needed(session_id, pii_types, where=""):
+    if not pii_types:
+        return
+    add_event({
+        "type": "privacy_block",
+        "session_id": session_id,
+        "where": where,
+        "pii_types": sorted(list(pii_types)),
+        "ts": _now_iso()
+    })
+
+# --- Rule-based intent tagging ---
+_INTENT_BY_TOPIC = {
+    "Northeastern Credentials": "Credentials / Login",
+    "Course Registration": "Registration",
+    "Program Information": "Program Info",
+    "Transcripts": "Transcripts",
+    "Graduation": "Graduation",
+    "Leave of Absence": "Leave / LOA",
+    "Appeals & Grade Dispute": "Appeals / Grade Dispute",
+    "Registration Error (New Students)": "Registration Error",
+    "Deferral and Late Arrivals (New Students)": "Deferral / Late Arrival"
+}
+
+_INTENT_KEYWORDS = [
+    ("Registration Error", ["error", "unable", "can't register", "registration error", "holds", "prereq", "prerequisite"]),
+    ("Credentials / Login", ["password", "login", "signin", "sign in", "mfa", "duo", "credentials"]),
+    ("Deferral / Late Arrival", ["deferral", "late", "arrival", "visa delay", "delay"]),
+    ("Transcripts", ["transcript"]),
+    ("Graduation", ["graduation", "convocation"]),
+    ("Appeals / Grade Dispute", ["appeal", "grade dispute", "regrade"]),
+    ("Leave / LOA", ["leave of absence", "loa", "withdraw"]),
+    ("Program Info", ["program", "course plan", "curriculum", "requirements"]),
+]
+
+def infer_intent(topic=None, note=None):
+    """Infer intent without LLM. Topic-first, then keyword fallback."""
+    if topic and topic in _INTENT_BY_TOPIC:
+        return _INTENT_BY_TOPIC[topic]
+    blob = " ".join([str(topic or ""), str(note or "")]).lower()
+    for label, kws in _INTENT_KEYWORDS:
+        if any(k in blob for k in kws):
+            return label
+    return "General"
+
+# --- Escalation + knowledge gap helpers (non-breaking: logs only) ---
+_URGENT_KWS = ("urgent", "asap", "deadline", "today", "tomorrow", "immediately", "stuck", "can't", "cannot", "unable")
+
+def _count_neg_for_session_topic(session_id, topic):
+    if not session_id or not topic:
+        return 0
+    store = load_store()
+    c = 0
+    for e in store.get("events", []):
+        if e.get("session_id") == session_id and e.get("type") == "feedback_negative" and e.get("topic") == topic:
+            c += 1
+    return c
+
+def _should_escalate(session_id, topic, reason_keys, note):
+    """Simple, safe escalation rules. Logs escalation but does not change UI."""
+    note_l = (note or "").lower()
+    # 1) Repeat failures on same topic in same session
+    if _count_neg_for_session_topic(session_id, topic) >= 2:
+        return True, "Repeated negative feedback on same topic"
+    # 2) Urgency keywords
+    if any(k in note_l for k in _URGENT_KWS):
+        return True, "Urgency detected in note"
+    # 3) Missing content signal
+    if (reason_keys and ("need_more_details" in reason_keys)) or (reason_keys and (None in reason_keys)):
+        return True, "Needs more details / unknown reason"
+    return False, ""
+
+def _build_case_summary(session_id, college, status, topic, intent, reason_labels, note):
+    """Template-based advisor-ready summary (no AI)."""
+    return {
+        "session_id": session_id,
+        "college": college or "",
+        "student_type": _norm_status(status) or "",
+        "topic": topic or "",
+        "intent": intent or "General",
+        "reasons": [str(r) for r in (reason_labels or []) if str(r).strip()],
+        "note": (note or "").strip(),
+        "ts": _now_iso()
+    }
+
+
 # ---------- routes: UI ----------
 @app.route('/health')
 def health():
@@ -194,12 +324,14 @@ def api_topic():
     sid = data.get('session_id')
     topic = data.get('topic')
     ctx = get_session_ctx(sid)
+    intent = infer_intent(topic=topic)
     add_event({
         "type": "topic_click",
         "session_id": sid,
         "college": ctx.get('college') or data.get('college'),
         "status": ctx.get('status') or data.get('status'),
         "topic": topic,
+        "intent": intent,
         "ts": _now_iso()
     })
     return jsonify({"question": f"You selected {topic}. Did this answer your question?",
@@ -251,12 +383,13 @@ def api_feedback():
     college = data.get('college') or ctx.get('college')
     status  = data.get('status')  or ctx.get('status')
     topic   = data.get('topic')   or get_last_topic_for_session(sid)
+    intent  = infer_intent(topic=topic, note=data.get('note'))
 
     if is_positive:
         add_event({
             "type": "feedback_positive",
             "session_id": sid, "college": college, "status": status,
-            "topic": topic, "ts": _now_iso()
+            "topic": topic, "intent": intent, "ts": _now_iso()
         })
         return jsonify({"ok": True})
 
@@ -269,34 +402,69 @@ def api_feedback():
 
     recorded = False
     freeform_labels = []
+    reason_keys_seen = []
+    reason_labels_seen = []
     for r in raw:
         if r is None or str(r).strip() == '':
             continue
         key = canonicalize_reason(r)
         pretty = REASON_LABELS.get(key) if key else (str(r) or 'Unknown')
+        reason_keys_seen.append(key)
+        reason_labels_seen.append(pretty)
         add_event({
             "type": "feedback_negative",
             "session_id": sid, "college": college, "status": status,
-            "topic": topic, "reason_key": key, "reason_label": pretty, "ts": _now_iso()
+            "topic": topic, "reason_key": key, "reason_label": pretty, "intent": intent, "ts": _now_iso()
         })
         recorded = True
         if key is None:
             freeform_labels.append(str(r).strip())
 
     if not recorded:
+        reason_keys_seen.append(None)
+        reason_labels_seen.append("Unknown")
         add_event({
             "type": "feedback_negative",
             "session_id": sid, "college": college, "status": status,
-            "topic": topic, "reason_key": None, "reason_label": "Unknown", "ts": _now_iso()
+            "topic": topic, "reason_key": None, "reason_label": "Unknown", "intent": intent, "ts": _now_iso()
         })
 
-    note = (data.get('note') or '').strip()
+    note_raw = (data.get('note') or '')
+    note, pii_types = _redact_pii(note_raw)
+    _log_privacy_if_needed(sid, pii_types, where='feedback.note')
+    note = note.strip()
     if freeform_labels or note:
         ts = _now_iso()
         for label in freeform_labels:
-            _append_freeform_csv([ts, sid, college, status, topic, None, label, ""])
+            label_red, label_pii = _redact_pii(label)
+            _log_privacy_if_needed(sid, label_pii, where='feedback.reason')
+            _append_freeform_csv([ts, sid, college, status, topic, None, label_red, ""])
         if note:
             _append_freeform_csv([ts, sid, college, status, topic, 'freeform_note', 'Freeform Note', note])
+    # --- Best-5: knowledge gap logging (no UI change) ---
+    # Flag gaps when students need more detail or reasons are unknown/freeform.
+    if ('need_more_details' in reason_keys_seen) or (None in reason_keys_seen):
+        add_event({
+            "type": "knowledge_gap",
+            "session_id": sid, "college": college, "status": status,
+            "topic": topic, "intent": intent,
+            "reason_keys": [rk if rk is not None else None for rk in reason_keys_seen],
+            "ts": _now_iso()
+        })
+
+    # --- Best-5: smart escalation trigger (logs only; UI can ignore) ---
+    escalate, esc_reason = _should_escalate(sid, topic, set(reason_keys_seen), note)
+    if escalate:
+        summary = _build_case_summary(sid, college, status, topic, intent, reason_labels_seen, note)
+        add_event({
+            "type": "escalation",
+            "session_id": sid, "college": college, "status": status,
+            "topic": topic, "intent": intent,
+            "why": esc_reason,
+            "summary": summary,
+            "ts": _now_iso()
+        })
+
 
     return jsonify({"ok": True})
 
