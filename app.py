@@ -7,10 +7,114 @@ import uuid, json, os
 import csv  # for free-form CSV capture
 import re   # for privacy guard + intent rules
 
+import smtplib
+from email.message import EmailMessage
+
+
+import time  # for cognitive session timestamps
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
 STORE_PATH = 'analytics_store.json'
 CSV_PATH   = 'feedback_freeform_feedback.csv'
+
+# ---------- Step 6 Enhancement: advisor notification (optional SMTP) ----------
+ESCALATION_EMAIL_TO = os.environ.get('ESCALATION_EMAIL_TO', 'g.subramanian@northeastern.edu')
+SMTP_HOST = os.environ.get('SMTP_HOST','')
+SMTP_PORT = int(os.environ.get('SMTP_PORT','587'))
+SMTP_USER = os.environ.get('SMTP_USER','')
+SMTP_PASS = os.environ.get('SMTP_PASS','')
+SMTP_FROM = os.environ.get('SMTP_FROM', SMTP_USER or 'no-reply@example.com')
+SMTP_USE_TLS = os.environ.get('SMTP_USE_TLS','1') not in ('0','false','False')
+
+
+
+# ---------- cognitive session state (NO LLM; demo-safe; additive only) ----------
+# In-memory session cognition for staging/demo. Does NOT change UI/flow; only tracks progress/context.
+COGNITIVE_SESSIONS = {}  # session_id -> dict
+COGNITIVE_TTL_SECONDS = 60 * 60 * 4  # 4 hours
+
+def _cog_now():
+    return time.time()
+
+def cog_init(session_id: str):
+    """Initialize cognitive session state if missing/expired."""
+    if not session_id:
+        return
+    s = COGNITIVE_SESSIONS.get(session_id)
+    now = _cog_now()
+    if (not s) or (now - s.get("last_active", 0) > COGNITIVE_TTL_SECONDS):
+        COGNITIVE_SESSIONS[session_id] = {
+            "task": None,              # current task/topic
+            "steps_done": [],          # ordered list of completed milestones
+            "failed_attempts": 0,      # simple counter (used later)
+            "escalation_ready": False, # used later
+            "escalation_reason": "",
+            "escalation_summary": None,
+            "last_topic": None,
+            "last_intent": None,
+            "created_at": now,
+            "last_active": now
+        }
+    else:
+        s["last_active"] = now
+
+def cog_mark(session_id: str, step: str = None, task: str = None):
+    """Update cognitive session state in a non-breaking way."""
+    if not session_id:
+        return
+    cog_init(session_id)
+    s = COGNITIVE_SESSIONS.get(session_id)
+    if not s:
+        return
+    if task is not None:
+        s["task"] = task
+    if step:
+        # avoid duplicates; keep order
+        if step not in s["steps_done"]:
+            s["steps_done"].append(step)
+    s["last_active"] = _cog_now()
+
+def cog_reset(session_id: str):
+    """Reset cognitive state for a session (used by start_over)."""
+    if session_id and session_id in COGNITIVE_SESSIONS:
+        del COGNITIVE_SESSIONS[session_id]
+
+def cog_note_negative_feedback(session_id: str, *, college=None, status=None, topic=None,
+                              intent=None, reason_keys=None, reason_labels=None, note=""):
+    """Update cognitive escalation signals without changing UI/flow.
+
+    This is deliberately conservative: it only marks escalation readiness when the
+    existing non-LLM escalation rules fire.
+    """
+    if not session_id:
+        return
+    cog_init(session_id)
+    s = COGNITIVE_SESSIONS.get(session_id)
+    if not s:
+        return
+
+    # Track last-known context for later (Step 5) UI rendering.
+    if topic is not None:
+        s["last_topic"] = topic
+        s["task"] = topic
+    if intent is not None:
+        s["last_intent"] = intent
+
+    # Increment a simple failure counter.
+    s["failed_attempts"] = int(s.get("failed_attempts") or 0) + 1
+
+    # Evaluate escalation using existing rules.
+    rk = set(reason_keys or [])
+    esc, why = _should_escalate(session_id, topic, rk, note)
+    if esc:
+        s["escalation_ready"] = True
+        s["escalation_reason"] = why or ""
+        s["escalation_summary"] = _build_case_summary(
+            session_id, college, status, topic, intent,
+            reason_labels or [], note
+        )
+
+    s["last_active"] = _cog_now()
 
 REASON_LABELS = {
     'incorrect': 'Information is Incorrect',
@@ -134,6 +238,36 @@ def _append_freeform_csv(row):
             w.writerow(row)
     except Exception:
         pass
+
+# ---------- Step 6 Enhancement: send escalation email (safe, optional) ----------
+def send_escalation_email(*, to_email: str, subject: str, body: str) -> dict:
+    """Send an email if SMTP is configured; otherwise simulate.
+
+    To enable real sending, set env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.
+    """
+    to_email = (to_email or '').strip()
+    if not to_email:
+        return {'sent': False, 'mode': 'simulated', 'error': 'missing_to'}
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+        # demo-safe: do not fail ticketing if mail is not configured
+        return {'sent': False, 'mode': 'simulated', 'error': 'smtp_not_configured'}
+
+    try:
+        msg = EmailMessage()
+        msg['From'] = SMTP_FROM
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.set_content(body)
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as s:
+            if SMTP_USE_TLS:
+                s.starttls()
+            s.login(SMTP_USER, SMTP_PASS)
+            s.send_message(msg)
+        return {'sent': True, 'mode': 'smtp'}
+    except Exception as e:
+        return {'sent': False, 'mode': 'smtp_error', 'error': str(e)}
+
 
 
 # ---------- Best-5 enhancements (NO LLM; non-breaking, append-only) ----------
@@ -281,6 +415,8 @@ def admin():
 def api_start():
     data = request.get_json(force=True) or {}
     session_id = data.get('session_id') or str(uuid.uuid4())
+    cog_init(session_id)
+    cog_mark(session_id, step='session_started')
     add_event({"type": "session_start", "session_id": session_id, "ts": _now_iso()})
     return jsonify({
         "title": "Hi! I’m your personal NU Assistant",
@@ -297,10 +433,25 @@ def api_college():
     data = request.get_json(force=True) or {}
     sid = data.get('session_id')
     college = data.get('college')
-    session_upsert_context(sid, college=college)
-    add_event({"type": "set_college", "session_id": sid, "college": college, "ts": _now_iso()})
+    # Guard against accidental “college” pollution (e.g., if a UI bug shows student-type buttons).
+    VALID_COLLEGES = {
+        "College of Professional Studies",
+        "College of Engineering",
+        "College of Science"
+    }
+    INVALID_COLLEGE = {"Incoming Student", "Continuing Student", "New Student"}
+    cog_init(sid)
+    cog_mark(sid, step='college_selected')
+    # If an invalid value comes in, keep the last valid college (if any) instead of overwriting.
+    ctx = get_session_ctx(sid)
+    if (college in INVALID_COLLEGE) or (college not in VALID_COLLEGES):
+        college = ctx.get('college')
+    else:
+        session_upsert_context(sid, college=college)
+        add_event({"type": "set_college", "session_id": sid, "college": college, "ts": _now_iso()})
+    college_display = college or "your college"
     return jsonify({
-        "prompt": f"Great — {college}. Are you a new or continuing student?",
+        "prompt": f"Great — {college_display}. Are you a new or continuing student?",
         "statuses": ["Incoming Student", "Continuing Student"]
     })
 
@@ -309,6 +460,8 @@ def api_status():
     data = request.get_json(force=True) or {}
     sid = data.get('session_id')
     status = data.get('status')
+    cog_init(sid)
+    cog_mark(sid, step='student_type_selected')
     session_upsert_context(sid, status=status)
     add_event({"type": "set_status", "session_id": sid, "status": status, "ts": _now_iso()})
     topics = ["Northeastern Credentials", "Course Registration", "Program Information",
@@ -323,6 +476,8 @@ def api_topic():
     data = request.get_json(force=True) or {}
     sid = data.get('session_id')
     topic = data.get('topic')
+    cog_init(sid)
+    cog_mark(sid, step='topic_selected', task=topic)
     ctx = get_session_ctx(sid)
     intent = infer_intent(topic=topic)
     add_event({
@@ -441,6 +596,19 @@ def api_feedback():
             _append_freeform_csv([ts, sid, college, status, topic, None, label_red, ""])
         if note:
             _append_freeform_csv([ts, sid, college, status, topic, 'freeform_note', 'Freeform Note', note])
+
+    # --- Step 6 support: remember last selected reasons for demo ticket summaries ---
+    try:
+        cog_init(sid)
+        s_cog = COGNITIVE_SESSIONS.get(sid) if sid else None
+        if s_cog is not None:
+            s_cog["last_reason_labels"] = list(reason_labels_seen)
+            s_cog["last_reason_keys"] = list(reason_keys_seen)
+            s_cog["last_note"] = note
+            COGNITIVE_SESSIONS[sid] = s_cog
+    except Exception:
+        pass
+
     # --- Best-5: knowledge gap logging (no UI change) ---
     # Flag gaps when students need more detail or reasons are unknown/freeform.
     if ('need_more_details' in reason_keys_seen) or (None in reason_keys_seen):
@@ -465,13 +633,88 @@ def api_feedback():
             "ts": _now_iso()
         })
 
+    # --- Step 4: smart escalation state (silent; UI can ignore) ---
+    # This does NOT change the response or flow; it only marks escalation readiness in memory.
+    cog_note_negative_feedback(
+        sid,
+        college=college,
+        status=status,
+        topic=topic,
+        intent=intent,
+        reason_keys=reason_keys_seen,
+        reason_labels=reason_labels_seen,
+        note=note
+    )
+
 
     return jsonify({"ok": True})
+
+
+@app.route('/api/v2/escalation_peek', methods=['POST'])
+def api_escalation_peek():
+    """Return escalation readiness for the current session (demo-safe).
+
+    Step 4 adds this endpoint so Step 5 can optionally show an advisor handoff card
+    without changing any existing UI/flow. If the front-end never calls this,
+    nothing changes.
+    """
+    data = request.get_json(force=True) or {}
+    sid = data.get('session_id')
+    cog_init(sid)
+    s = COGNITIVE_SESSIONS.get(sid) if sid else None
+    if not s:
+        return jsonify({"ok": True, "escalation_ready": False})
+    return jsonify({
+        "ok": True,
+        "escalation_ready": bool(s.get("escalation_ready")),
+        "reason": s.get("escalation_reason") or "",
+        "summary": s.get("escalation_summary") if s.get("escalation_ready") else None
+    })
+
+
+# ---------- Step 6: demo ticketing (student-visible status) ----------
+# Demo-safe in-memory ticket store. Does NOT integrate with any advisor system.
+TICKETS = {}  # ticket_id -> dict
+
+def _ticket_now():
+    return time.time()
+
+def _ticket_status_for_age(age_s: float) -> str:
+    # Kept for backward compatibility; Step 6 enhanced uses explicit resolution.
+    return "In Progress"
+
+def _ticket_public_view(t: dict, *, include_admin: bool = False) -> dict:
+    """Return ticket view for the student; optionally include admin-only fields."""
+    if not t:
+        return {"exists": False}
+
+    view = {
+        "exists": True,
+        "ticket_id": t.get("ticket_id") or "",
+        "status": t.get("status") or "In Progress",
+        "created_at": t.get("created_at") or "",
+        "summary": t.get("summary") or None,
+        "email_to": t.get("email_to") or "",
+        "email_mode": t.get("email_mode") or "",
+        "email_sent": bool(t.get("email_sent")),
+    }
+
+    if include_admin:
+        view["_admin"] = {
+            "resolve_url": t.get("resolve_url") or "",
+            "resolve_key": t.get("resolve_key") or ""
+        }
+
+    return view
 
 @app.route('/api/v2/start_over', methods=['POST'])
 def api_start_over():
     data = request.get_json(force=True) or {}
     sid = data.get('session_id')
+    cog_reset(sid)
+    # New session cognition begins after start_over
+    cog_init(sid)
+    cog_mark(sid, step='session_started')
     add_event({"type": "start_over", "session_id": sid, "ts": _now_iso()})
     return jsonify({
         "title": "Hi! I’m your personal NU Assistant",
@@ -482,6 +725,217 @@ def api_start_over():
             "College of Science"
         ]
     })
+
+
+# ---------- Step 6: ticketing store (persistent + advisor console) ----------
+TICKETS_PATH = 'tickets_store.json'
+
+def _load_tickets():
+    if not os.path.exists(TICKETS_PATH):
+        return {}
+    try:
+        with open(TICKETS_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+def _save_tickets(tickets: dict):
+    try:
+        with open(TICKETS_PATH, 'w', encoding='utf-8') as f:
+            json.dump(tickets, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def _ticket_make_id():
+    return "T-" + uuid.uuid4().hex[:8].upper()
+
+def _ticket_status_label(t: dict) -> str:
+    return "Resolved" if (t or {}).get("resolved") else "In Progress"
+
+def _ticket_public_view(t: dict) -> dict:
+    if not t:
+        return {"exists": False}
+    return {
+        "exists": True,
+        "ticket_id": t.get("ticket_id",""),
+        "status": _ticket_status_label(t),
+        "created_at": t.get("created_at",""),
+        "updated_at": t.get("updated_at",""),
+        "college": t.get("college",""),
+        "student_type": t.get("student_type",""),
+        "topic": t.get("topic",""),
+        "reasons": t.get("reasons",[]) or [],
+        "note": t.get("note","") or "",
+        "advisor_reply": t.get("advisor_reply","") or ""
+    }
+
+def _ticket_create_from_payload(session_id: str, payload: dict) -> dict:
+    tickets = _load_tickets()
+    topic = (payload.get("topic") or "").strip()
+
+    # reuse open ticket for same session+topic
+    for t in tickets.values():
+        if t.get("session_id") == session_id and (t.get("topic") or "") == topic and not t.get("resolved"):
+            return t
+
+    tid = _ticket_make_id()
+    now = _now_iso()
+    t = {
+        "ticket_id": tid,
+        "session_id": session_id,
+        "created_at": now,
+        "updated_at": now,
+        "resolved": False,
+        "college": payload.get("college","") or "",
+        "student_type": _norm_status(payload.get("status") or payload.get("student_type") or "") or "",
+        "topic": payload.get("topic","") or "",
+        "intent": payload.get("intent","") or "",
+        # store ALL selected reasons as LABELS exactly from UI payload
+        "reasons": [str(x) for x in (payload.get("reasons") or []) if str(x).strip()],
+        "note": (payload.get("note") or "").strip(),
+        "advisor_reply": ""
+    }
+    tickets[tid] = t
+    _save_tickets(tickets)
+    return t
+
+def _ticket_resolve(ticket_id: str, reply: str = "") -> dict:
+    tickets = _load_tickets()
+    t = tickets.get(ticket_id)
+    if not t:
+        return {}
+    t["advisor_reply"] = (reply or "").strip()
+    t["resolved"] = True
+    t["updated_at"] = _now_iso()
+    tickets[ticket_id] = t
+    _save_tickets(tickets)
+    return t
+
+
+@app.route('/ticketing')
+def ticketing_page():
+    return serve_template(['ticketing.html'])
+
+@app.route('/api/v2/ticket_create', methods=['POST'])
+def api_ticket_create():
+    data = request.get_json(force=True) or {}
+    sid = (data.get('session_id') or '').strip()
+    if not sid:
+        return jsonify({"ok": False, "error": "missing_session_id"}), 400
+
+    # PII-safe note
+    note_raw = data.get("note") or ""
+    note, pii_types = _redact_pii(note_raw)
+    _log_privacy_if_needed(sid, pii_types, where='ticket.note')
+    data["note"] = note.strip()
+
+    # Convert reason keys to labels if needed, but keep labels as-is
+    reasons = data.get("reasons")
+    if isinstance(reasons, list):
+        fixed=[]
+        for r in reasons:
+            r = str(r).strip()
+            if r in REASON_LABELS:
+                fixed.append(REASON_LABELS.get(r))
+            else:
+                fixed.append(r)
+        data["reasons"] = [x for x in fixed if x]
+
+    ctx = get_session_ctx(sid)
+    # Step 6: if UI did not send reasons/note/topic, use last captured negative feedback
+    if not (data.get('reasons') and isinstance(data.get('reasons'), list) and len(data.get('reasons'))>0):
+        try:
+            data['reasons'] = ctx.get('last_negative_reasons') or []
+        except Exception:
+            data['reasons'] = []
+    if not (data.get('note') and str(data.get('note')).strip()):
+        try:
+            data['note'] = (ctx.get('last_negative_note') or '').strip() or (data.get('note') or '')
+        except Exception:
+            pass
+    if not (data.get('topic') and str(data.get('topic')).strip()):
+        try:
+            data['topic'] = (ctx.get('last_negative_topic') or '').strip() or (data.get('topic') or '')
+        except Exception:
+            pass
+    data.setdefault("college", ctx.get("college"))
+    data.setdefault("status", ctx.get("status"))
+    data.setdefault("topic", data.get("topic") or get_last_topic_for_session(sid))
+    data.setdefault("intent", infer_intent(topic=data.get("topic"), note=data.get("note")))
+
+    t = _ticket_create_from_payload(sid, data)
+
+    try:
+        add_event({"type":"ticket_created","session_id":sid,"college":t.get("college"),"status":t.get("student_type"),
+                   "topic":t.get("topic"),"ticket_id":t.get("ticket_id"),"ts":_now_iso()})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "ticket": _ticket_public_view(t)})
+
+@app.route('/api/v2/ticket_status', methods=['GET'])
+def api_ticket_status():
+    ticket_id = (request.args.get('ticket_id') or '').strip()
+    sid = (request.args.get('session_id') or '').strip()
+
+    tickets = _load_tickets()
+    t = tickets.get(ticket_id) if ticket_id else None
+
+    # fallback by session
+    if not t and sid:
+        candidates = [x for x in tickets.values() if x.get("session_id")==sid]
+        candidates.sort(key=lambda x: x.get("created_at",""), reverse=True)
+        if candidates:
+            t = candidates[0]
+
+    return jsonify({"ok": True, "ticket": _ticket_public_view(t)})
+
+@app.route('/api/v2/tickets_list', methods=['GET'])
+def api_tickets_list():
+    start = request.args.get('start','').strip()
+    end   = request.args.get('end','').strip()
+    college = request.args.get('college','').strip()
+    topic = request.args.get('topic','').strip()
+
+    sd = parse_date_yyyy_mm_dd(start) if start else None
+    ed = parse_date_yyyy_mm_dd(end) if end else None
+
+    tickets = _load_tickets()
+    items=[]
+    for t in tickets.values():
+        ts = (t.get("created_at") or "")
+        if sd or ed:
+            if not within_range(ts, sd, ed):
+                continue
+        if college and t.get("college") != college:
+            continue
+        if topic and t.get("topic") != topic:
+            continue
+        items.append(_ticket_public_view(t))
+
+    items.sort(key=lambda x: x.get("created_at",""), reverse=True)
+    return jsonify({"ok": True, "tickets": items})
+
+@app.route('/api/v2/ticket_reply', methods=['POST'])
+def api_ticket_reply():
+    data = request.get_json(force=True) or {}
+    ticket_id = (data.get("ticket_id") or "").strip()
+    reply = (data.get("reply") or "").strip()
+    if not ticket_id:
+        return jsonify({"ok": False, "error": "missing_ticket_id"}), 400
+
+    reply2, pii_types = _redact_pii(reply)
+    _log_privacy_if_needed("", pii_types, where='ticket.reply')
+    t = _ticket_resolve(ticket_id, reply=reply2)
+    if not t:
+        return jsonify({"ok": False, "error": "ticket_not_found"}), 404
+
+    try:
+        add_event({"type":"ticket_resolved","session_id":t.get("session_id"),"ticket_id":ticket_id,"ts":_now_iso()})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "ticket": _ticket_public_view(t)})
 
 # ---------- analytics ----------
 def aggregate(events, college=None, status=None):
