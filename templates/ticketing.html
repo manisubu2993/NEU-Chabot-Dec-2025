@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>NEU Toronto – Ticketing Console</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root{ --neu-red:#C8102E; --text:#111; --muted:#666; --card:#fff; --bg:#f5f6f8; }
+    body{ margin:0; font-family:Lato,system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text);}
+    .wrap{ max-width:1100px; margin:22px auto; padding:0 16px;}
+    .top{ background:#0b0b0b; border-radius:16px; overflow:hidden; box-shadow:0 10px 24px rgba(0,0,0,.10);}
+    .brand{ padding:18px 18px; display:flex; align-items:center; gap:12px;}
+    .logo{ width:40px; height:40px; border-radius:10px; background:linear-gradient(135deg,var(--neu-red),#7a0015); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900;}
+    .brand h1{ margin:0; font-size:16px; color:#fff; letter-spacing:.2px;}
+    .panel{ background:var(--card); border-radius:16px; padding:14px; margin-top:14px; box-shadow:0 10px 24px rgba(0,0,0,.08);}
+    .filters{ display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:10px; align-items:end;}
+    label{ font-size:12px; font-weight:800; color:#222;}
+    input, select, textarea{ width:100%; padding:10px 10px; border:1px solid #ddd; border-radius:10px; font-family:inherit; font-size:13px; background:#fff;}
+    button{ padding:10px 12px; border-radius:10px; border:0; background:var(--neu-red); color:#fff; font-weight:900; cursor:pointer;}
+    button.secondary{ background:#222;}
+    .hint{ font-size:12px; color:var(--muted); margin-top:8px;}
+    table{ width:100%; border-collapse:collapse; margin-top:12px;}
+    th, td{ text-align:left; padding:10px 8px; border-bottom:1px solid #eee; vertical-align:top; font-size:13px;}
+    th{ font-size:12px; color:#333; font-weight:900; text-transform:uppercase; letter-spacing:.5px;}
+    .status{ display:inline-block; padding:4px 8px; border-radius:999px; font-weight:900; font-size:12px; background:#f0f0f0; }
+    .status.resolved{ background:#eaf7ef; color:#0a6a2b;}
+    .status.progress{ background:#fff3e8; color:#9a3b00;}
+    .row-actions{ display:flex; gap:8px; align-items:center;}
+    .replyBox{ min-height:72px; }
+    .small{ font-size:12px; color:var(--muted); }
+    .nowrap{ white-space:nowrap; }
+    @media (max-width: 980px){
+      .filters{ grid-template-columns: 1fr 1fr; }
+      th:nth-child(4), td:nth-child(4), th:nth-child(5), td:nth-child(5){ display:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo">N</div>
+        <h1>Ticketing Console (Demo)</h1>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="filters">
+        <div>
+          <label for="start">Start date</label>
+          <input id="start" type="date"/>
+        </div>
+        <div>
+          <label for="end">End date</label>
+          <input id="end" type="date"/>
+        </div>
+        <div>
+          <label for="college">College</label>
+          <select id="college"><option value="">All</option></select>
+        </div>
+<div class="row-actions">
+          <button id="btnApply">Apply</button>
+          <button id="btnRefresh" class="secondary">Refresh</button>
+        </div>
+      </div>
+      <div class="hint">Tip: Use filters to view tickets by date, college, and topic. Reply + Resolve updates the bot status to <strong>Resolved</strong> automatically on refresh/polling.</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="nowrap">Created</th>
+            <th>Ticket</th>
+            <th>Status</th>
+            <th>College</th>
+            <th>Topic</th>
+            <th>Reasons</th>
+            
+            <th>Advisor Reply</th>
+            <th class="nowrap">Action</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+
+      <div class="small" id="count"></div>
+    </div>
+  </div>
+
+<script>
+  const $ = (s)=>document.querySelector(s);
+  const rowsEl = $('#rows');
+  const countEl = $('#count');
+
+  function esc(s){
+    return (s||'').toString()
+      .replaceAll('&','&amp;').replaceAll('<','&lt;')
+      .replaceAll('>','&gt;').replaceAll('"','&quot;')
+      .replaceAll("'",'&#39;');
+  }
+
+  function todayISO(){
+    const d=new Date(); 
+    const m=String(d.getMonth()+1).padStart(2,'0');
+    const day=String(d.getDate()).padStart(2,'0');
+    return `${d.getFullYear()}-${m}-${day}`;
+  }
+
+  async function fetchTicketsForDropdown(){
+    const start = $('#start').value;
+    const end   = $('#end').value;
+
+    // Date-wise options (no college filter)
+    let qs = new URLSearchParams();
+    if(start) qs.set('start', start);
+    if(end) qs.set('end', end);
+
+    try{
+      const r = await fetch('/api/v2/tickets_list?' + qs.toString(), {cache:'no-store'});
+      const j = await r.json();
+      const list = (j && j.tickets) ? j.tickets : [];
+      if(list.length) return list;
+    }catch(e){}
+
+    // Fallback: all tickets (so dropdown always shows options)
+    try{
+      const r2 = await fetch('/api/v2/tickets_list', {cache:'no-store'});
+      const j2 = await r2.json();
+      return (j2 && j2.tickets) ? j2.tickets : [];
+    }catch(e){}
+    return [];
+  }
+
+  async function fetchTickets(){
+    const start = $('#start').value;
+    const end   = $('#end').value;
+    const college = $('#college').value;
+
+    const qs = new URLSearchParams();
+    if(start) qs.set('start', start);
+    if(end) qs.set('end', end);
+    if(college) qs.set('college', college);
+
+    const r = await fetch('/api/v2/tickets_list?' + qs.toString(), {cache:'no-store'});
+    const j = await r.json();
+    return (j && j.tickets) ? j.tickets : [];
+  }
+
+  function rebuildDropdowns(tickets){
+    const INVALID_COLLEGE = new Set(["Incoming Student","Continuing Student"]);
+    const colleges = new Set();
+    tickets.forEach(t=>{
+      const c = (t.college||'').toString().trim();
+      if(c && !INVALID_COLLEGE.has(c)) colleges.add(c);
+    });
+
+    const collegeSel = $('#college');
+    const keepCollege = collegeSel.value;
+
+    collegeSel.innerHTML = '<option value="">All</option>' + [...colleges].sort().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+    if([...colleges].includes(keepCollege)) collegeSel.value = keepCollege;
+  }
+
+  function render(tickets){
+    const INVALID_COLLEGE = new Set(["Incoming Student","Continuing Student"]);
+    rowsEl.innerHTML = '';
+    tickets.forEach(t=>{
+      const st = (t.status||'In Progress').toLowerCase()==='resolved' ? 'resolved' : 'progress';
+      const reasons = Array.isArray(t.reasons) ? t.reasons.join(', ') : (t.reason || t.what_didnt_work || '');
+      const reply = t.advisor_reply || '';
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="nowrap">${esc((t.created_at||'').slice(0,19).replace('T',' '))}</td>
+        <td class="nowrap"><strong>${esc(t.ticket_id||'')}</strong></td>
+        <td><span class="status ${st}">${esc(t.status||'In Progress')}</span></td>
+        <td>${esc(INVALID_COLLEGE.has((t.college||'').toString().trim()) ? '' : (t.college||''))}</td>
+        <td>${esc(t.topic||'')}</td>
+        <td>${esc(reasons)}</td>
+        
+        <td>
+          <textarea class="replyBox" data-reply-for="${esc(t.ticket_id||'')}" placeholder="Type your reply (optional).">${esc(reply)}</textarea>
+        </td>
+        <td class="nowrap">
+          <button data-resolve="${esc(t.ticket_id||'')}">Reply & Resolve</button>
+        </td>
+      `;
+      rowsEl.appendChild(row);
+    });
+
+    countEl.textContent = `Showing ${tickets.length} ticket(s).`;
+  }
+
+  async function refresh(allTicketsForDropdown=false){
+    const tickets = await fetchTickets();
+    if(allTicketsForDropdown){
+      const dd = await fetchTicketsForDropdown();
+      rebuildDropdowns(dd);
+    }
+    render(tickets);
+  }
+
+  async function resolveTicket(ticketId){
+    const ta = document.querySelector(`textarea[data-reply-for="${ticketId}"]`);
+    const reply = ta ? ta.value.trim() : '';
+    const r = await fetch('/api/v2/ticket_reply', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ticket_id: ticketId, reply})
+    });
+    const j = await r.json();
+    if(j && j.ok){
+      await refresh(false);
+      alert('Ticket marked Resolved.');
+    }else{
+      alert('Could not resolve ticket. Please refresh and try again.');
+    }
+  }
+
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-resolve]');
+    if(btn){
+      resolveTicket(btn.getAttribute('data-resolve'));
+    }
+  });
+
+  $('#btnApply').addEventListener('click', ()=>refresh(false));
+  $('#btnRefresh').addEventListener('click', ()=>refresh(true));
+
+  // defaults
+  $('#end').value = todayISO();
+  // start default = 7 days ago
+  const d = new Date(); d.setDate(d.getDate()-7);
+  $('#start').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  refresh(true);
+</script>
+</body>
+</html>
