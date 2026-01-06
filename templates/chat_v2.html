@@ -182,10 +182,32 @@
 </div>
 
 <script>
+
+
   const stack = document.getElementById('stack');
-  const sessionId =
-    (crypto.randomUUID && crypto.randomUUID()) ||
-    Math.random().toString(36).slice(2);
+  // Step 7: Exact Resume (non-breaking, add-only)
+  const LS_KEY = 'neu_v2_resume_state';
+
+  function _loadLS(){
+    try{ return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); }catch(e){ return null; }
+  }
+  function _saveLS(obj){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(obj||null)); }catch(e){}
+  }
+  function _clearLS(){
+    try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  }
+  function _newSessionId(){
+    return (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2);
+  }
+
+  const _LS0 = _loadLS();
+  let sessionId = (_LS0 && _LS0.session_id) ? _LS0.session_id : _newSessionId();
+
+  // Step 6 Enhanced (admin/demo): enable admin controls with ?admin=1
+  const ADMIN_MODE = (new URLSearchParams(window.location.search).get('admin') === '1');
+  const ESCALATION_EMAIL = 'g.subramanian@northeastern.edu';
+
 
   function scrollPanelToBottom(){
     const panel = document.querySelector('.body');
@@ -199,23 +221,26 @@
   const btnMin = document.getElementById('btn-min');
   const btnExit = document.getElementById('btn-exit');
 
+  if(btnMax){
   btnMax.addEventListener('click', ()=>{
     win.classList.add('maximized');
     btnMax.style.display = 'none';
     btnMin.style.display = 'inline-block';
   });
-
+}
+if(btnMin){
   btnMin.addEventListener('click', ()=>{
     win.classList.remove('maximized');
     btnMin.style.display = 'none';
     btnMax.style.display = 'inline-block';
   });
-
+}
+if(btnExit){
   btnExit.addEventListener('click', ()=>{
     window.history.back();
   });
-
-  function appendBot(html){
+}
+function appendBot(html){
     const row = document.createElement('div');
     row.className = 'bubble-row';
 
@@ -282,6 +307,34 @@
       console.error(e);
       return {};
     }
+
+  function getSelectedNegativeReasons(){
+    const reasons = [];
+
+    // 1) Checkbox list
+    document.querySelectorAll('.neg-reason input[type="checkbox"]:checked').forEach(cb=>{
+      const lbl = cb.closest('.neg-reason')?.querySelector('.neg-label')?.textContent?.trim();
+      if(lbl) reasons.push(lbl);
+    });
+
+    // 2) Active/selected option items
+    if(reasons.length === 0){
+      document.querySelectorAll('.neg-option.active, .neg-option.selected').forEach(el=>{
+        const t = el.textContent?.trim();
+        if(t) reasons.push(t);
+      });
+    }
+
+    // 3) Hidden input fallback
+    if(reasons.length === 0){
+      const hidden = document.querySelector('#negReason, #neg_reason, input[name="negReason"]');
+      const v = hidden ? (hidden.value||'').trim() : '';
+      if(v) reasons.push(v);
+    }
+
+    return reasons;
+  }
+
   }
 
   function renderButtons(labels, handler){
@@ -307,6 +360,21 @@
     scrollPanelToBottom();
   }
 
+  // --- Step 3: Fix-It Troubleshooter (Decision-Tree AI, no LLM) ---
+  // Non-breaking helper: presents a small decision-tree panel inside the chat stream.
+  function showTroubleshooter(topicName, question, options){
+    appendBot(`<p class="p"><strong>${topicName}</strong><br>${question}</p>`);
+
+    const labels = options.map(o=>o.label).concat(["Main Menu"]);
+    renderButtons(labels, choice=>{
+      if(choice==="Main Menu") return showMainMenuInline();
+      const opt = options.find(o=>o.label===choice);
+      if(!opt) return showMainMenuInline();
+      appendBot(opt.html);
+      helpfulTail(topicName);
+    });
+  }
+
   const linkBtn = (text, href)=>
     `<a class="link" target="_blank" rel="noopener" href="${href}">${text}</a>`;
 
@@ -314,48 +382,439 @@
     session_id: sessionId,
     college: null,
     status: null,
-    topic: null
+    topic: null,
+    checkpoint: 'start',      // start | college | status | topic | ticket_tracking
+    ticket_id: null,          // preserves Step 6 ticket lifecycle on refresh
+    ticket_prompted: false,   // Step 7: prevents resume looping on ticket status after a ticket exists
+    pending: null            // {type, data} for exact resume of the last unanswered step
   };
+
+  function persistState(){
+    _saveLS({
+      session_id: STATE.session_id,
+      college: STATE.college,
+      status: STATE.status,
+      topic: STATE.topic,
+      checkpoint: STATE.checkpoint,
+      ticket_id: STATE.ticket_id,
+      ticket_prompted: STATE.ticket_prompted,
+      pending: STATE.pending,
+      saved_at: Date.now()
+    });
+  }
+
+  function loadStateIntoMemory(saved){
+    if(!saved) return;
+    if(saved.session_id){ sessionId = saved.session_id; STATE.session_id = saved.session_id; }
+    STATE.college = saved.college || null;
+    STATE.status  = saved.status || null;
+    STATE.topic   = saved.topic || null;
+    STATE.checkpoint = saved.checkpoint || STATE.checkpoint || 'start';
+    STATE.ticket_id = saved.ticket_id || null;
+    STATE.ticket_prompted = !!saved.ticket_prompted;
+    STATE.pending = saved.pending || null;
+  }
+
+  
+  // ----- Step 7: exact resume helpers (add-only) -----
+  function setPending(type, data){
+    STATE.pending = { type: type, data: (data||{}) };
+    persistState();
+  }
+  function clearPending(){
+    STATE.pending = null;
+    persistState();
+  }
+
+  // Render buttons and remember what the user still needs to answer (for exact resume)
+  function renderButtonsPending(pendingType, labels, handler, data){
+    setPending(pendingType, data||{});
+    return renderButtons(labels, async (choice)=>{
+      // once user clicks, this pending question is answered
+      clearPending();
+      return handler(choice);
+    });
+  }
+
+  async function resumePending(){
+    const p = STATE.pending;
+    if(!p || !p.type) return false;
+
+    // Ensure progress card shows the restored context
+    updateProgressCard();
+
+    // Resume by re-showing ONLY the last unanswered question (no replay)
+    const t = p.type;
+    const d = p.data || {};
+    if(t === 'choose_college'){
+      appendBot(`<p class="p"><strong>Main Menu</strong> — choose your college.</p>`);
+      const colleges = (START_CACHE && Array.isArray(START_CACHE.colleges))
+        ? START_CACHE.colleges
+        : [
+            "College of Professional Studies",
+            "College of Engineering",
+            "College of Science"
+          ];
+      renderButtonsPending('choose_college', colleges, onPickCollege, {});
+      return true;
+    }
+
+    if(t === 'choose_status'){
+      // College already selected; ask the same student-type question again
+      appendBot(`<p class="p">Great — ${STATE.college}. Are you a new or continuing student?</p>`);
+      renderButtonsPending('choose_status', ["Incoming Student","Continuing Student"], onPickStatus, {});
+      return true;
+    }
+
+    if(t === 'choose_topic'){
+      appendBot(`<p class="p">Got it — ${STATE.status}. Choose a topic:</p>`);
+      const isNew = (STATE.status === "New Student" || STATE.status === "Incoming Student");
+      if(isNew){
+        renderButtonsPending('choose_topic', [
+          "Northeastern Credentials",
+          "Course Registration",
+          "Program Information",
+          "Registration Error (New Students)",
+          "Deferral and Late Arrivals (New Students)",
+          "Back to the Start"
+        ], onPickIncomingTopicOrBack, {});
+      } else {
+        renderButtonsPending('choose_topic', [
+          "Northeastern Credentials",
+          "Course Registration",
+          "Program Information",
+          "Transcripts",
+          "Graduation",
+          "Leave of Absence",
+          "Appeals & Grade Dispute",
+          "Back to the Start"
+        ], onPickTopicOrBack, {});
+      }
+      return true;
+    }
+
+    if(t === 'ask_anything_else'){
+      // resume the "anything else?" question
+      const topic = d.topic || STATE.topic;
+      appendBot(`<p class="p"><strong>Is there anything else you would like help with today?</strong></p>`);
+      renderButtonsPending('ask_anything_else', ["Yes","No","Main Menu"], (pick)=>{
+        if(pick === "Yes" || pick === "Main Menu") return showMainMenuInline();
+        // go to helpful question
+        showHelpfulQuestion(topic);
+      }, {topic});
+      return true;
+    }
+
+    if(t === 'helpful_question'){
+      const topic = d.topic || STATE.topic;
+      showHelpfulQuestion(topic);
+      return true;
+    }
+
+    if(t === 'negative_feedback'){
+      const topic = d.topic || STATE.topic;
+      showNegativeFeedbackForm(topic);
+      return true;
+    }
+
+    return false;
+  }
+
+  // Extracted (add-only) helpers so resume can land exactly on these steps
+  function showHelpfulQuestion(topic){
+    appendBot(`<p class="p"><strong>Was this information helpful?</strong></p>`);
+    renderButtonsPending('helpful_question', [
+      "Yes, it was helpful",
+      "No, I still need help",
+      "Main Menu"
+    ], (fb)=>{
+      if(fb === "Main Menu") return showMainMenuInline();
+      if(fb && fb.startsWith("Yes")){
+        sendFeedback({ helpful:true, topic });
+        appendBot(`<p class="p">That’s Great! I’m glad we were able to provide the information you needed.</p>`);
+        appendBot(`<p class="p"><strong>Is there anything else I can help you with today?</strong></p>`);
+        return renderButtonsPending('ask_anything_else', ["Yes","No","Main Menu"], end=>{
+          if(end === "Yes" || end === "Main Menu") return showMainMenuInline();
+          appendBot(`<p class="p">I’m glad I was able to help you today and I look forward to having you back. Till next time!</p>`);
+          renderButtonsPending('choose_college', ["Main Menu"], ()=>showMainMenuInline(), {});
+        }, {topic});
+      }
+      // Negative path → show exact feedback form
+      return showNegativeFeedbackForm(topic);
+    }, {topic});
+  }
+
+  function showNegativeFeedbackForm(topic){
+    // Mark that this is the pending step
+    setPending('negative_feedback', {topic});
+
+    const id = 'neg_' + Math.random().toString(36).slice(2);
+    appendBot(`
+      <div class="p" id="${id}">
+        I’m sorry I couldn’t help you find what you were looking for today. Please let me know what you feel needs improving.
+        <div style="margin-top:6px">
+          <label><input type="checkbox" value="incorrect"> Information is Incorrect</label><br/>
+          <label><input type="checkbox" value="not_relevant"> Information is Not Relevant</label><br/>
+          <label><input type="checkbox" value="unclear"> Information is Unclear</label><br/>
+          <label><input type="checkbox" value="need_more_details"> I Need More Details</label>
+        </div>
+
+        <p class="p" style="margin-top:6px;color:#C8102E;font-weight:700">
+          Please don't add your personal information (e.g., NUID, emails, and phone numbers).
+        </p>
+
+        <div style="margin-top:6px">
+          <input type="text"
+                 placeholder="Optional: add a short note"
+                 style="width:100%;padding:8px;border:1px solid #bbb;border-radius:8px"/>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div class="btn" id="${id}_submit">Submit feedback</div>
+        </div>
+      </div>
+    `);
+
+    setTimeout(()=>{
+      const wrap = document.getElementById(id);
+      const btn  = document.getElementById(id + '_submit');
+      if(!wrap || !btn) return;
+
+      // Use existing reason capture helper
+      btn.onclick = async ()=>{
+        const reasons = [];
+        wrap.querySelectorAll('input[type="checkbox"]:checked').forEach(cb=>{
+          const v = (cb.value||'').trim();
+          if(v) reasons.push(v);
+        });
+        const noteInput = wrap.querySelector('input[type="text"]');
+        const note = noteInput ? (noteInput.value||'') : '';
+
+        clearPending();
+        // send feedback (non-blocking) then check if escalation is ready
+        sendFeedback({ helpful:false, topic, reasons, note });
+
+        // Small wait/retry to allow server to process beacon/fetch before we peek escalation.
+        async function _waitForEscalation(maxTries=6, delayMs=250){
+          for(let i=0;i<maxTries;i++){
+            try{
+              const e = await peekEscalation();
+              if(e && e.escalation_ready){
+                return e;
+              }
+            }catch(_){}
+            await new Promise(r=>setTimeout(r, delayMs));
+          }
+          return null;
+        }
+
+        appendBot(`<p class="p">Thanks — your feedback has been recorded.</p>`);
+
+// Step 6/7 behavior: after any negative feedback, always offer the Advisor Ticket option.
+// If escalation rules are ready, we show the richer advisor handoff summary.
+// If not, we still show the handoff card using the current context (topic/college/status + reasons + note).
+let esc = null;
+try{ esc = await _waitForEscalation(); }catch(_){}
+
+if(esc && esc.escalation_ready){
+  showAdvisorHandoffCard(esc.summary || {}, esc.escalation_reason || "");
+  return;
+}
+
+// Fallback summary (no escalation trigger, but ticketing must still be available)
+showAdvisorHandoffCard({
+  college: STATE.college || "",
+  student_type: STATE.status || "",
+  topic: topic || STATE.topic || "",
+  reasons: reasons || [],
+  note: note || "",
+  steps_tried: (STATE && Array.isArray(STATE.steps_done)) ? STATE.steps_done : []
+}, "");
+return;};
+    }, 0);
+  }
+  // ----- /Step 7 helpers -----
+async function hardStartOver(){
+    // Clear local state first (UI-safe)
+    _clearLS();
+    try{
+      await post('/api/v2/start_over', { session_id: STATE.session_id });
+    }catch(e){}
+    sessionId = _newSessionId();
+    STATE.session_id = sessionId;
+    STATE.college = null; STATE.status = null; STATE.topic = null;
+    STATE.ticket_id = null;
+    STATE.ticket_prompted = false;
+    STATE.pending = null;
+    STATE.checkpoint = 'start';
+    persistState();
+    return await freshStart();
+  }
+
+
+  /* ----- Step 2: Visible Progress Tracker (additive; no flow changes) ----- */
+  function updateProgressCard(){
+    // Create once, then update in-place (no new bubbles added).
+    let card = document.getElementById('progress-card');
+    if(!card){
+      card = document.createElement('div');
+      card.id = 'progress-card';
+      card.className = 'row card';
+      // Keep styling consistent with existing cards (no new CSS rules).
+      card.style.marginTop = 'calc(0.6 * var(--cm))';
+      // Insert at the very top of the chat stack so it's always visible.
+      stack.insertBefore(card, stack.firstChild);
+    }
+
+    const ok = (v)=> (v ? "✅" : "⬜");
+    const college = STATE.college ? STATE.college : "Not selected";
+    const studentType = STATE.status ? STATE.status : "Not selected";
+    const topic = STATE.topic ? STATE.topic : "Not selected";
+
+    card.innerHTML = `
+      <div class="p">
+        <strong>Progress</strong><br>
+        ${ok(STATE.college)} College: <strong>${college}</strong><br>
+        ${ok(STATE.status)} Student type: <strong>${studentType}</strong><br>
+        ${ok(STATE.topic)} Current task: <strong>${topic}</strong>
+      </div>
+    `;
+  }
+
 
   let START_CACHE = null;
 
   (async function init(){
-    const data = await post('/api/v2/start', {
-      session_id: STATE.session_id
-    });
+    // Step 7: Resume exactly on refresh (demo-safe; no UI/layout changes)
+    if(_LS0 && _LS0.session_id && (_LS0.college || _LS0.status || _LS0.topic || _LS0.ticket_id)){
+      loadStateIntoMemory(_LS0);
+      updateProgressCard();
 
-    START_CACHE = data;
-
-    if (data.title)
-      appendBot(`<h3 class="title">${data.title}</h3>`);
-
-    if (data.intro){
-      String(data.intro)
-        .split('<br>')
-        .map(s=>s.trim())
-        .filter(Boolean)
-        .forEach(part=>{
-          appendBot(`<p class="p">${part}</p>`);
-        });
+      appendBot(`<p class="p"><strong>Continue where you left off?</strong></p>`);
+      return renderButtons(["Continue","Start Over"], async pick=>{
+        if(pick === "Start Over"){
+          return await hardStartOver();
+        }
+        persistState();
+        return await resumeFromSaved();
+      });
     }
 
-    if (Array.isArray(data.colleges))
-      renderButtons(data.colleges, onPickCollege);
+    persistState();
+    return await freshStart();
   })();
+
+  async function freshStart(){
+    const data = await post('/api/v2/start', { session_id: STATE.session_id });
+    START_CACHE = data;
+
+    try{
+      if(!data || (!data.title && !Array.isArray(data.colleges))){
+        appendBot(`<p class="p" style="color:#C8102E"><strong>⚠️ Bot couldn’t load.</strong><br>
+          Please confirm the server is running and the endpoint <code>/api/v2/start</code> is reachable.</p>`);
+      }
+    }catch(e){}
+
+    if (data && data.title) appendBot(`<h3 class="title">${data.title}</h3>`);
+
+    if (data && data.intro){
+      String(data.intro).split('<br>').map(s=>s.trim()).filter(Boolean).forEach(part=>{
+        appendBot(`<p class="p">${part}</p>`);
+      });
+    }
+
+    if (data && Array.isArray(data.colleges)){
+      renderButtonsPending('choose_college', data.colleges, onPickCollege, {});
+    }
+
+    STATE.checkpoint = 'start';
+    persistState();
+    updateProgressCard();
+  }
+
+  async function resumeFromSaved(){
+    // Step 7: if we have an exact pending step, resume it first.
+    try{ if(await resumePending()){ return; } }catch(e){}
+
+    // If a ticket exists, DO NOT force-resume into ticket status (prevents looping after refresh).
+    // Instead, offer an optional "View Ticket Status" and then show the normal Main Menu.
+    if(STATE.ticket_id && !STATE.ticket_prompted){
+      try{
+        const st = await fetchTicketStatus(STATE.ticket_id);
+        if(st && st.ok && st.ticket && st.ticket.exists){
+          st.ticket._admin = (st.admin || {});
+          const tid = escapeHtml(st.ticket.ticket_id || STATE.ticket_id);
+          const status = escapeHtml(st.ticket.status || 'In Progress');
+
+          // Mark as prompted so refresh won't keep landing here
+          STATE.ticket_prompted = true;
+          persistState();
+
+          appendBot(`<p class="p"><strong>We found an existing ticket</strong><br>
+            Ticket <strong>${tid}</strong> is currently: <strong>${status}</strong>.<br>
+            Would you like to view the detailed status now?</p>`);
+
+          // If user chooses to view, show the status card (but we still won't lock resume to it).
+          return renderButtons(["View Ticket Status","Main Menu"], pick=>{
+            if(pick === "View Ticket Status"){
+              // Do not set checkpoint to ticket_tracking; keep resume free.
+              showTicketStatusCard(st.ticket);
+              updateProgressCard();
+              return renderButtons(["Main Menu"], ()=>showMainMenuInline());
+            }
+            return showMainMenuInline();
+          });
+        }
+      }catch(e){}
+      // If ticket can't be fetched, fall through to rebuild the flow menu.
+    }
+
+    // Rebuild to the exact pending step (deterministic, no replay).
+    if(STATE.college && !STATE.status){
+      updateProgressCard();
+      // This will render the correct prompt + buttons
+      return await onPickCollege(STATE.college);
+    }
+
+    if(STATE.college && STATE.status && !STATE.topic){
+      updateProgressCard();
+      // Ensure college context is applied, then show the same topic menu
+      await onPickCollege(STATE.college);
+      return await onPickStatus(STATE.status);
+    }
+
+    if(STATE.college && STATE.status && STATE.topic){
+      updateProgressCard();
+      const isNew = (STATE.status === "New Student" || STATE.status === "Incoming Student");
+      if(isNew){
+        return onPickIncomingTopicOrBack(STATE.topic);
+      }
+      return onPickTopicOrBack(STATE.topic);
+    }
+
+    // Default fallback
+    return await freshStart();
+  }
+;
 
   function showMainMenuInline(){
     const colleges =
       (START_CACHE && Array.isArray(START_CACHE.colleges))
         ? START_CACHE.colleges
-        : ["Incoming Student","Continuing Student"];
+        : [
+            "College of Professional Studies",
+            "College of Engineering",
+            "College of Science"
+          ];
 
     appendBot(`<p class="p"><strong>Main Menu</strong> — choose an option to continue.</p>`);
 
-    renderButtons(colleges, onPickCollege);
+    renderButtonsPending('choose_college', colleges, onPickCollege, {});
   }
 
   async function onPickCollege(lbl){
     STATE.college = lbl;
+    STATE.checkpoint = 'college';
+    persistState();
 
     const data = await post('/api/v2/college', {
       session_id: STATE.session_id,
@@ -366,11 +825,13 @@
       appendBot(`<p class="p">${data.prompt}</p>`);
 
     if(Array.isArray(data.statuses))
-      renderButtons(data.statuses, onPickStatus);
+      renderButtonsPending('choose_status', data.statuses, onPickStatus, {});
   }
 
   async function onPickStatus(lbl){
     STATE.status = lbl;
+    STATE.checkpoint = 'status';
+    persistState();
 
     const data = await post('/api/v2/status', {
       session_id: STATE.session_id,
@@ -392,11 +853,11 @@
         "Registration Error (New Students)",
         "Deferral and Late Arrivals (New Students)",
         "Back to the Start"
-      ], onPickIncomingTopicOrBack);
+      ], onPickIncomingTopicOrBack, {});
 
     } else {
       if(Array.isArray(data.topics))
-        renderButtons([...data.topics, data.backLabel], onPickTopicOrBack);
+        renderButtonsPending('choose_topic', [...data.topics, data.backLabel], onPickTopicOrBack, {});
     }
   }
 
@@ -405,6 +866,10 @@
       return startOver();
 
     STATE.topic = lbl;
+    STATE.checkpoint = 'topic';
+    persistState();
+    STATE.checkpoint = 'topic';
+    persistState();
 
     post('/api/v2/topic', {
       session_id: STATE.session_id,
@@ -424,138 +889,20 @@
     (flows[lbl] || (()=>{}))();
   }
 
-  function helpfulTail(topic){
+  
+function helpfulTail(topic){
+    // Step 7: remember this exact question so refresh resumes here
     appendBot(`<p class="p"><strong>Is there anything else you would like help with today?</strong></p>`);
 
-    renderButtons(["Yes","No","Main Menu"], pick=>{
-      if(pick === "Yes" || pick === "Main Menu")
+    renderButtonsPending('ask_anything_else', ["Yes","No","Main Menu"], pick=>{
+      if(pick === "Yes" || pick === "Main Menu"){
         return showMainMenuInline();
-
-      appendBot(`<p class="p"><strong>Was this information helpful?</strong></p>`);
-
-      renderButtons([
-        "Yes, it was helpful",
-        "No, I still need help",
-        "Main Menu"
-      ], fb=>{
-        if(fb === "Main Menu")
-          return showMainMenuInline();
-
-        if(fb.startsWith("Yes")){
-          sendFeedback({
-            helpful: true,
-            topic
-          });
-
-          appendBot(`<p class="p">That’s Great! I’m glad we were able to provide the information you needed.</p>`);
-          appendBot(`<p class="p"><strong>Is there anything else I can help you with today?</strong></p>`);
-
-          return renderButtons(["Yes","No","Main Menu"], end=>{
-            if(end === "Yes" || end === "Main Menu")
-              return showMainMenuInline();
-
-            appendBot(`<p class="p">I’m glad I was able to help you today and I look forward to having you back. Till next time!</p>`);
-
-            renderButtons(["Main Menu"], ()=>showMainMenuInline());
-          });
-        }
-        // Negative path
-        const id = 'neg_' + Math.random().toString(36).slice(2);
-        appendBot(`
-          <div class="p" id="${id}">
-            I’m sorry I couldn’t help you find what you were looking for today. Please let me know what you feel needs improving.
-            <div style="margin-top:6px">
-              <label><input type="checkbox" value="incorrect"> Information is Incorrect</label><br/>
-              <label><input type="checkbox" value="not_relevant"> Information is Not Relevant</label><br/>
-              <label><input type="checkbox" value="unclear"> Information is Unclear</label><br/>
-              <label><input type="checkbox" value="need_more_details"> I Need More Details</label>
-            </div>
-
-            <!-- NEW CAUTION MESSAGE -->
-            <p class="p" style="margin-top:6px;color:#C8102E;font-weight:700">
-              Please don't add your personal information (e.g., NUID, emails, and phone numbers).
-            </p>
-
-            <div style="margin-top:6px">
-              <input type="text"
-                     placeholder="Optional: add a short note"
-                     style="width:100%;padding:8px;border:1px solid #bbb;border-radius:8px"/>
-            </div>
-            <div class="row" style="margin-top:8px">
-              <div class="btn" id="${id}_submit">Submit feedback</div>
-            </div>
-          </div>
-        `);
-
-        setTimeout(()=>{
-          const wrap = document.getElementById(id);
-          const btn  = document.getElementById(id + '_submit');
-
-          // Scroll so this block is fully visible
-          const bodyPanel = document.querySelector('.body');
-          if(bodyPanel){
-            bodyPanel.scrollTop = bodyPanel.scrollHeight;
-          }
-
-          // Enhanced validator: block IDs, emails, phones, number words
-          if (wrap) {
-            const noteInput = wrap.querySelector('input[type="text"]');
-            if (noteInput) {
-              noteInput.addEventListener('input', function(){
-                let t = this.value;
-
-                // BLOCK direct email patterns
-                t = t.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/gi, '');
-
-                // BLOCK indirect email attempts like "abc at gmail dot com"
-                t = t.replace(/\b(at|@)\b/gi, '');
-                t = t.replace(/\b(dot|\.com|\.ca|\.edu|\.org|\.net)\b/gi, '');
-
-                // BLOCK common email-domain words
-                t = t.replace(/\b(gmail|hotmail|outlook|yahoo|icloud|protonmail|northeastern|neu)\b/gi, '');
-
-                // BLOCK phone-like patterns (sequences of digits, with spaces/dashes/brackets)
-                t = t.replace(/(\+?\d[\d\s\-().]{5,})/g, '');
-
-                // BLOCK raw digits (for NUID / ID numbers)
-                t = t.replace(/[0-9]/g, '');
-
-                // BLOCK number words (to avoid "one zero two" etc.)
-                const blockWords =
-                  /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|hundred|thousand|million|lakh)\b/gi;
-                t = t.replace(blockWords, '');
-
-                this.value = t;
-              });
-            }
-          }
-
-          if(btn && wrap){
-            btn.onclick = ()=>{
-              const reasons =
-                [...wrap.querySelectorAll('input[type="checkbox"]:checked')]
-                  .map(x=>x.value);
-
-              const note =
-                wrap.querySelector('input[type="text"]').value || "";
-
-              sendFeedback({
-                helpful: false,
-                topic,
-                reasons,
-                note
-              });
-
-              appendBot(`<p class="p">Thank you, your feedback helps me improve! I hope to be able to better support you in the future.</p>`);
-
-              // DIRECTLY show Main Menu again — no extra follow-up questions
-              renderButtons(["Main Menu"], ()=>showMainMenuInline());
-            };
-          }
-        }, 0);
-      });
-    });
+      }
+      // No → go to the helpfulness question (also resume-aware)
+      return showHelpfulQuestion(topic);
+    }, {topic});
   }
+
 
   function sendFeedback(payload){
     const body = JSON.stringify({
@@ -582,6 +929,257 @@
     });
   }
 
+  // --- Step 5: Advisor handoff card (visible only when escalation is ready) ---
+  function peekEscalation(){
+    return fetch('/api/v2/escalation_peek', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ session_id: sessionId, email_to: ESCALATION_EMAIL })
+    }).then(r=>r.json()).catch(()=>({ok:true, escalation_ready:false}));
+  }
+
+    function escapeHtml(s){
+    return String(s)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+
+  // --- Step 6: Demo ticket status (student-visible) ---
+  function createDemoTicket(reasons, note, topic){
+    return fetch('/api/v2/ticket_create', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        session_id: sessionId,
+        reasons: Array.isArray(reasons) ? reasons : [],
+        note: String(note||''),
+        topic: String(topic||'')
+      })
+    }).then(r=>r.json()).catch(()=>({ok:false}));
+  }
+
+  function fetchTicketStatus(ticketId){
+    const q = new URLSearchParams({ ticket_id: ticketId || '', session_id: sessionId });
+    return fetch('/api/v2/ticket_status?'+q.toString(), { method:'GET', cache:'no-store' })
+      .then(r=>r.json()).catch(()=>({ok:false}));
+  }
+
+  function resolveTicket(ticketId, key){
+    return fetch('/api/v2/ticket_resolve', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ ticket_id: ticketId || '', key: key || '', session_id: sessionId })
+    }).then(r=>r.json()).catch(()=>({ok:false}));
+  }
+
+  function showTicketStatusCard(ticket){
+    if(!ticket || !ticket.ticket_id){
+      appendBot(`<p class="p">⚠️ I couldn't create a ticket right now. Please use the contact details shown for this topic.</p>`);
+      return renderButtons(["Main Menu"], ()=>showMainMenuInline());
+    }
+
+    const status = escapeHtml(ticket.status || 'In Progress');
+    const advisorReplyRaw = String(ticket.advisor_reply || '').trim();
+    const tid = escapeHtml(ticket.ticket_id);
+
+    // Optional: show key details from the ticket summary (multi-reason transparency)
+    const summary = ticket.summary || null;
+    let summaryHtml = '';
+    if(summary && typeof summary === 'object'){
+      const reasons = (summary.reasons && Array.isArray(summary.reasons))
+        ? summary.reasons.map(x=>String(x||'').trim()).filter(Boolean)
+        : [];
+      if(reasons.length){
+        summaryHtml += `<br><strong>What didn’t work:</strong> ${escapeHtml(reasons.join(', '))}`;
+      }
+      const note = String(summary.note || '').trim();
+      if(note){
+        summaryHtml += `<br><strong>Note:</strong> ${escapeHtml(note)}`;
+      }
+    }
+
+    appendBot(
+      `<p class="p"><strong>Ticket Status</strong><br>
+        Ticket <strong>${tid}</strong> is currently: <strong>${status}</strong>${summaryHtml}</p>`
+    );
+
+    const adminKey =
+      (ticket._admin && ticket._admin.resolve_key)
+        ? String(ticket._admin.resolve_key)
+        : "";
+
+    const btns = ADMIN_MODE
+      ? ["Refresh Status", "Resolve Ticket (Admin)", "Main Menu"]
+      : ["Refresh Status", "Main Menu"];
+
+    renderButtons(btns, pick=>{
+      if(pick === "Main Menu") return showMainMenuInline();
+
+      if(pick === "Resolve Ticket (Admin)"){
+        return resolveTicket(ticket.ticket_id, adminKey).then(r=>{
+          if(r && r.ok && r.ticket && r.ticket.exists){
+            appendBot(`<p class="p">✅ Ticket <strong>${escapeHtml(r.ticket.ticket_id)}</strong> is now: <strong>${escapeHtml(r.ticket.status)}</strong>.</p>`);
+                      const ar1 = String((r.ticket && r.ticket.advisor_reply) || '').trim();
+            if(String(r.ticket.status||'').toLowerCase()==='resolved' && ar1){
+              appendBot(`<p class="p"><strong>Advisor Reply:</strong> ${escapeHtml(ar1)}</p>`);
+            }
+} else {
+            appendBot(`<p class="p">⚠️ Unable to resolve ticket right now.</p>`);
+          }
+        });
+      }
+
+      // Refresh Status
+      fetchTicketStatus(ticket.ticket_id).then(d=>{
+        const t = d && d.ticket ? d.ticket : null;
+        if(t && t.exists){
+          appendBot(`<p class="p">Ticket <strong>${escapeHtml(t.ticket_id)}</strong> is now: <strong>${escapeHtml(t.status)}</strong>.</p>`);
+                  const ar2 = String(t.advisor_reply || '').trim();
+          if(String(t.status||'').toLowerCase()==='resolved' && ar2){
+            appendBot(`<p class="p"><strong>Advisor Reply:</strong> ${escapeHtml(ar2)}</p>`);
+          }
+} else {
+          appendBot(`<p class="p">⚠️ Unable to fetch ticket status right now.</p>`);
+        }
+      });
+    });
+  }
+
+
+    const status = escapeHtml(ticket.status || 'Submitted');
+    const tid = escapeHtml(ticket.ticket_id);
+    const age = '';
+
+    const summary = ticket.summary || null;
+    let summaryHtml = '';
+    if(summary && typeof summary === 'object'){
+      const reasons = (summary.reasons && Array.isArray(summary.reasons)) ? summary.reasons.map(x=>String(x||'').trim()).filter(Boolean) : [];
+      if(reasons.length){ summaryHtml += `<br><strong>What didn’t work:</strong> ${escapeHtml(reasons.join(', '))}`; }
+      const note = String(summary.note || '').trim();
+      if(note){ summaryHtml += `<br><strong>Note:</strong> ${escapeHtml(note)}`; }
+    }
+
+
+    appendBot(
+      `<p class="p"><strong>Ticket Status</strong><br>
+        Ticket <strong>${tid}</strong> is currently: <strong>${status}</strong>${summaryHtml}</p>`
+    );
+
+    // Demo-friendly polling: update a few times until resolved
+    let polls = 0;
+    const maxPolls = 5;
+    const pollEveryMs = 5000;
+
+    const poll = ()=>{
+      polls++;
+      fetchTicketStatus(ticket.ticket_id).then(d=>{
+        const t = d && d.ticket ? d.ticket : null;
+        if(t && t.exists){
+          const st = (t.status || '').toLowerCase();
+          appendBot(`<p class="p">Update: Ticket <strong>${escapeHtml(t.ticket_id)}</strong> → <strong>${escapeHtml(t.status)}</strong>.</p>`);
+          if(st === 'resolved' || polls >= maxPolls){
+            renderButtons(["Main Menu"], ()=>showMainMenuInline());
+          } else {
+            setTimeout(poll, pollEveryMs);
+          }
+        } else {
+          renderButtons(["Main Menu"], ()=>showMainMenuInline());
+        }
+      });
+    };
+
+    // Offer manual refresh too (keeps flow unchanged)
+    const adminKey = (ticket._admin && ticket._admin.resolve_key) ? ticket._admin.resolve_key : "";
+
+    const btns = ADMIN_MODE ? ["Refresh Status","Resolve Ticket (Admin)","Main Menu"] : ["Refresh Status","Main Menu"];
+    renderButtons(btns, pick=>{
+      if(pick==="Main Menu") return showMainMenuInline();
+      if(pick==="Resolve Ticket (Admin)"){
+        return resolveTicket(ticket.ticket_id, adminKey).then(r=>{
+          if(r && r.ok && r.ticket && r.ticket.exists){
+            appendBot(`<p class="p">✅ Ticket <strong>${escapeHtml(r.ticket.ticket_id)}</strong> is now: <strong>${escapeHtml(r.ticket.status)}</strong>.</p>`);
+          } else {
+            appendBot(`<p class="p">⚠️ Unable to resolve ticket right now.</p>`);
+          }
+        });
+      }
+      fetchTicketStatus(ticket.ticket_id).then(d=>{
+        const t = d && d.ticket ? d.ticket : null;
+        if(t && t.exists){
+          appendBot(`<p class="p">Ticket <strong>${escapeHtml(t.ticket_id)}</strong> is now: <strong>${escapeHtml(t.status)}</strong>.</p>`);
+        } else {
+          appendBot(`<p class="p">⚠️ Unable to fetch ticket status right now.</p>`);
+        }
+      });
+    });
+
+    // start polling in background (non-blocking)
+    setTimeout(poll, pollEveryMs);
+
+function showAdvisorHandoffCard(summary, reason){
+    // Keep appearance consistent: normal bot bubble + existing button styling.
+    const safeReason = (reason || '').trim();
+    const title = "Connect with an Advisor";
+    const lines = [];
+
+    if (summary && typeof summary === 'object'){
+      const reasonsArr = (summary.reasons && Array.isArray(summary.reasons)) ? summary.reasons : [];
+      const reasonsClean = reasonsArr.map(x=>String(x||'').trim()).filter(Boolean);
+      if(reasonsClean.length){
+        lines.push(`<li><strong>What didn’t work:</strong> ${escapeHtml(reasonsClean.join(', '))}</li>`);
+      }
+
+      if (summary.issue) lines.push(`<li><strong>Issue:</strong> ${escapeHtml(String(summary.issue))}</li>`);
+      if (summary.college) lines.push(`<li><strong>College:</strong> ${escapeHtml(String(summary.college))}</li>`);
+      if (summary.student_type) lines.push(`<li><strong>Student type:</strong> ${escapeHtml(String(summary.student_type))}</li>`);
+      if (summary.topic) lines.push(`<li><strong>Topic:</strong> ${escapeHtml(String(summary.topic))}</li>`);
+      if (summary.steps_tried && Array.isArray(summary.steps_tried) && summary.steps_tried.length){
+        lines.push(`<li><strong>Steps tried:</strong> ${escapeHtml(summary.steps_tried.join(', '))}</li>`);
+      }
+    }
+
+    appendBot(
+      `<p class="p"><strong>${title}</strong><br>
+        If you still need help, I can prepare a clear summary for the right team.</p>
+       ${safeReason ? `<p class="p"><em>Reason:</em> ${escapeHtml(safeReason)}</p>` : ``}
+       ${lines.length ? `<ul class="p" style="margin:6px 0 10px 18px; padding:0;">${lines.join('')}</ul>` : ``}
+       <p class="p">Choose an option below:</p>`
+    );
+
+    renderButtons(["Create Advisor Ticket (Demo)","Main Menu"], choice=>{
+      if(choice==="Main Menu") return showMainMenuInline();
+
+      createDemoTicket((summary&&summary.reasons)||[], (summary&&summary.note)||'', (summary&&summary.topic)||'').then(d=>{
+        if(d && d.ok && d.ticket && d.ticket.exists){
+          d.ticket._admin = (d.admin || {});
+          STATE.ticket_id = d.ticket.ticket_id;
+          // New ticket created; do NOT force ticket status on resume (prevents post-ticket resume loops)
+          STATE.ticket_prompted = true;
+          STATE.checkpoint = 'post_ticket';
+          persistState();
+          showTicketStatusCard(d.ticket);
+        } else {
+          appendBot(`<p class="p">⚠️ I couldn't create a ticket right now. Please use the contact details shown for this topic.</p>`);
+          renderButtons(["Main Menu"], ()=>showMainMenuInline());
+        }
+      });
+    });
+  }
+
+  function maybeShowAdvisorHandoff(){
+    // Call after negative feedback; shows nothing unless escalation is ready.
+    peekEscalation().then(d=>{
+      if(d && d.escalation_ready){
+        showAdvisorHandoffCard(d.summary, d.reason);
+      }
+    });
+  }
+
+
   /* ----- Flow 1: Northeastern Credentials ----- */
   function flowCredentials(){
     appendBot(`<p class="p"><strong>Northeastern Credentials</strong><br>
@@ -597,7 +1195,22 @@
 
         return renderButtons(["Yes","No","Main Menu"], a2=>{
           if(a2==="Main Menu") return showMainMenuInline();
-          if(a2==="Yes") return helpfulTail("Northeastern Credentials");
+          if(a2==="Yes") return showTroubleshooter(
+            "Northeastern Credentials",
+            "Quick troubleshooter: which issue best matches what you see?",
+            [
+              { label: "Password / MFA issue", html: `<p class="p">Try these quick steps:<br>
+                1) Use the troubleshooting guide: ${linkBtn("Account / Login Help","https://service.northeastern.edu/tech?id=kb_article_view&sysparm_article=KB0012456")}<br>
+                2) If you use multi-factor authentication, re-check your authenticator setup and retry login.<br>
+                If it still fails, contact IT: <a class="link" href="mailto:help@northeastern.edu">help@northeastern.edu</a>.</p>` },
+              { label: "Account locked / access denied", html: `<p class="p">If you see an account lock or access denied message, wait a few minutes and retry.<br>
+                Then follow: ${linkBtn("Account / Login Help","https://service.northeastern.edu/tech?id=kb_article_view&sysparm_article=KB0012456")}<br>
+                If it persists, email IT: <a class="link" href="mailto:help@northeastern.edu">help@northeastern.edu</a>.</p>` },
+              { label: "Still cannot log in", html: `<p class="p">Please email IT for help re-activating your credentials:<br>
+                <a class="link" href="mailto:help@northeastern.edu">help@northeastern.edu</a><br>
+                Include your name, campus (Toronto), and a short description of the error message.</p>` }
+            ]
+          );
 
           appendBot(`<p class="p">First, review this guide to troubleshoot your Northeastern credentials: ${linkBtn("Student Hub & credentials help","https://service.northeastern.edu/tech?id=kb_article_view&sysparm_article=KB0012456")}.</p>`);
           appendBot(`<p class="p">If you still cannot log in, email <a class="link" href="mailto:help@northeastern.edu">help@northeastern.edu</a> with your <strong>full name</strong> and <strong>NUID</strong> to re-activate your Northeastern credentials.</p>`);
@@ -789,7 +1402,20 @@
             Email: <a class="link" href="mailto:learnerservices@northeastern.edu">learnerservices@northeastern.edu</a></p>`);
           appendBot(`<p class="p"><strong>For students in other colleges</strong>, please contact your academic advisor or the Toronto student support services: ${linkBtn("Student Support – Toronto","https://studentlifetoronto.sites.northeastern.edu/student-support-services/")}</p>`);
           appendBot(`<p class="p">You can also review important dates (like add/drop and I Am Here deadlines) in the Academic Calendar: ${linkBtn("Academic Calendar","https://registrar.northeastern.edu/group/calendar/")}</p>`);
-          helpfulTail("Registration Error (New Students)");
+          return showTroubleshooter(
+          "Registration Error (New Students)",
+          "Quick troubleshooter: what type of registration issue are you seeing?",
+          [
+            { label: "Hold / Block on account", html: `<p class="p">If you have a hold, Student Hub will usually show the reason under your account/registration area.<br>
+              Review holds and next steps, then retry registration.<br>
+              If you need support, contact your student support team listed above.</p>` },
+            { label: "Prerequisite / program restriction", html: `<p class="p">If you see a prerequisite or program restriction message, it typically means a requirement is missing or you need approval/override.<br>
+              Please contact your support team listed above with the exact course code and the message you see.</p>` },
+            { label: "Course full / time conflict", html: `<p class="p">If the course is full or there is a schedule conflict, try selecting an alternate section if available in Student Hub.<br>
+              If you’re unsure which section to pick, contact your support team listed above.</p>` },
+            { label: "Not sure / different error", html: `<p class="p">Please take a screenshot of the exact error message and share it with your support team listed above so they can resolve it quickly.</p>` }
+          ]
+        );
         });
       });
     }
@@ -838,7 +1464,9 @@
       topic: STATE.topic
     });
 
-    if (data.question)
+    
+    window.LAST_TOPIC = topic;
+if (data.question)
       appendBot(`<p class="p">${data.question}</p>`);
 
     if (data.yesLabel && data.noLabel)
@@ -906,6 +1534,7 @@
       status: null,
       topic: null
     };
+    updateProgressCard();
 
     if (data.title)
       appendBot(`<h3 class="title">${data.title}</h3>`);
@@ -937,6 +1566,8 @@
       ], {type:'application/json'})
     );
   });
+
+
 </script>
 </body>
 </html>
