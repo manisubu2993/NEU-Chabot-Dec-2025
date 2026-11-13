@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>NEU Admin Analytics (v2)</title>
+<title>Student Support – Admin Analytics</title>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
@@ -19,12 +19,12 @@
   }, { once:true });
 </script>
 <style>
-  :root{--neu:#C8102E; --ink:#111; --muted:#666; --card:#fff; --border:#E6E6E6;
+  :root{--brand:#C8102E; --ink:#111; --muted:#666; --card:#fff; --border:#E6E6E6;
     --ok:#2E7D32; --warn:#E58A3C; --bad:#C62828; --bg:#f7f7f7;
     --ok-bg:#EAF5EC; --ok-br:#C8E6CB; --warn-bg:#FFF4E5; --warn-br:#F8D9A5; --bad-bg:#FDEBEE; --bad-br:#F5B7BD;}
   *{box-sizing:border-box}
   body{font-family:Lato,Arial,sans-serif;background:var(--bg);margin:0;padding:24px;color:var(--ink)}
-  h2{margin:0 0 10px;color:var(--neu);font-weight:900}
+  h2{margin:0 0 10px;color:var(--brand);font-weight:900}
   h3{margin:0 0 10px}
   .wrap{max-width:1300px;margin:0 auto}
   .row{display:flex;flex-wrap:wrap;gap:18px;margin-top:14px}
@@ -32,7 +32,7 @@
   .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   label{font-size:13px;margin-right:8px}
   select,input,button{padding:7px 10px;border:1px solid #bbb;border-radius:8px;font-family:inherit}
-  button.primary{border-color:#000;background:#fff;color:var(--neu);cursor:pointer}
+  button.primary{border-color:#000;background:#fff;color:var(--brand);cursor:pointer}
   .legend{font-size:12px;color:var(--muted)}
   .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
   .canvas-wrap{position:relative;width:100%;height:280px}
@@ -288,7 +288,7 @@
     "Deferral and Late Arrivals (New Students)": "learnerservices@northeastern.edu"
   };
 
-  const COLORS = { neu:"#C8102E", ok:"#2E7D32", bad:"#C62828", warn:"#E58A3C" };
+  const COLORS = { brand:"#C8102E", ok:"#2E7D32", bad:"#C62828", warn:"#E58A3C" };
   const REASONS = [
     {key:"incorrect",         name:"Information is Incorrect",    color:"#C62828"},
     {key:"not_relevant",      name:"Information is Not Relevant", color:"#E58A3C"},
