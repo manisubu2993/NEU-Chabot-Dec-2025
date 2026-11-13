@@ -419,7 +419,7 @@ def api_start():
     cog_mark(session_id, step='session_started')
     add_event({"type": "session_start", "session_id": session_id, "ts": _now_iso()})
     return jsonify({
-        "title": "Hi! I’m your personal NU Assistant",
+        "title": "Hi! I’m your Student Support Assistant",
         "intro": "How can I help you today?<br>Select your college below to get started.",
         "colleges": [
             "College of Professional Studies",
@@ -717,7 +717,7 @@ def api_start_over():
     cog_mark(sid, step='session_started')
     add_event({"type": "start_over", "session_id": sid, "ts": _now_iso()})
     return jsonify({
-        "title": "Hi! I’m your personal NU Assistant",
+        "title": "Hi! I’m your Student Support Assistant",
         "intro": "How can I help you today?<br>Select your college below to get started.",
         "colleges": [
             "College of Professional Studies",
