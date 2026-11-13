@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>NEU Toronto Assistant – v2</title>
+  <title>Student Support Assistant</title>
   <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
   <style>
   :root{
     --cm: 37.8px; /* 1cm ≈ 37.8px */
-    --neu-red:#C8102E; --text:#111; --muted:#666; --border:#DBDBDB; --white:#FFF;
+    --brand-red:#C8102E; --text:#111; --muted:#666; --border:#DBDBDB; --white:#FFF;
     --bubble-w: 7.2;        /* cm */
     --bubble-r-offset: 0.3;  /* cm from right wall */
     --bubble-v-gap: 0.3;     /* cm vertical gap */
@@ -108,7 +108,7 @@
   line-height: 1.45;
 }
 
-  .title{ color:var(--neu-red); font-weight:700; font-size:20px; margin:0 0 6px 0; }
+  .title{ color:var(--brand-red); font-weight:700; font-size:20px; margin:0 0 6px 0; }
   .p{ margin:0; font-size:13px; color:var(--text); }
 
   .typing{ display:flex; align-items:center; gap:6px; color:var(--muted); }
@@ -140,11 +140,11 @@
   .btn{
     display:inline-block; height: calc(var(--btn-h) * var(--cm)); width: calc(var(--btn-w) * var(--cm));
     line-height: calc(var(--btn-h) * var(--cm)); padding:0 16px; border:1px solid #000; border-radius: calc(0.25 * var(--cm));
-    background:#fff; color:var(--neu-red); text-align:center; font-size:14px; cursor:pointer; user-select:none;
+    background:#fff; color:var(--brand-red); text-align:center; font-size:14px; cursor:pointer; user-select:none;
     transition: transform .06s ease, box-shadow .12s ease;
   }
   .btn:hover{ font-weight:700; font-style: italic; }
-  .btn.selected{ background: var(--neu-red); color:#fff; font-weight:700; }
+  .btn.selected{ background: var(--brand-red); color:#fff; font-weight:700; }
 
   .footerpad{ height:18px; }
 
@@ -153,7 +153,7 @@
 <body>
 <div class="window" id="win">
   <div class="header">
-    <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Northeastern University">
+    <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="University logo">
         <div class="actions">
       <span id="btn-max" class="icon-btn" title="Maximize">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -186,7 +186,7 @@
 
   const stack = document.getElementById('stack');
   // Step 7: Exact Resume (non-breaking, add-only)
-  const LS_KEY = 'neu_v2_resume_state';
+  const LS_KEY = 'ssa_v2_resume_state';
 
   function _loadLS(){
     try{ return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); }catch(e){ return null; }
